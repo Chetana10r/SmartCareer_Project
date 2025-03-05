@@ -27,13 +27,17 @@ function ResumeRecommender() {
     const formData = new FormData();
     formData.append("resume", file);
     formData.append("job_role", jobRole);
-    
+
     try {
-      const response = await axios.post("http://127.0.0.1:5000/upload", formData, {
-        headers: {
-          "Content-Type": "multipart/form-data",
-        },
-      });
+      const response = await axios.post(
+        "http://127.0.0.1:5000/upload",
+        formData,
+        {
+          headers: {
+            "Content-Type": "multipart/form-data",
+          },
+        }
+      );
       setResult(response.data);
     } catch (error) {
       console.error("Error processing resume:", error);
@@ -46,11 +50,11 @@ function ResumeRecommender() {
     <div className="flex flex-col items-center p-5">
       <h2 className="text-xl font-bold mb-4">Resume Skill Recommender</h2>
       <input type="file" onChange={handleFileChange} className="mb-4" />
-      <input 
-        type="text" 
-        placeholder="Enter the Job Role you are applying for" 
-        value={jobRole} 
-        onChange={handleRoleChange} 
+      <input
+        type="text"
+        placeholder="Enter the Job Role you are applying for"
+        value={jobRole}
+        onChange={handleRoleChange}
         className="mb-4 p-2 border border-gray-300 rounded-md"
       />
       <button
@@ -63,10 +67,14 @@ function ResumeRecommender() {
       {result && (
         <div className="mt-4 w-96 p-4 border border-gray-200 rounded-md">
           <h3 className="font-bold">
+            User Provided Role: {result.User_Provided_Job_Role}
+          </h3>
+          <h3 className="font-bold">
             Predicted Job Category: {result.Predicted_Job_Category}
           </h3>
           <p>
-            <strong>Extracted Skills:</strong> {result.Extracted_Skills.join(", ")}
+            <strong>Extracted Skills:</strong>{" "}
+            {result.Extracted_Skills.join(", ")}
           </p>
           <p>
             <strong>Missing Skills:</strong> {result.Missing_Skills.join(", ")}
@@ -77,16 +85,17 @@ function ResumeRecommender() {
               <li key={index}>{course}</li>
             ))}
           </ul>
-          {result.Recommended_Certifications && result.Recommended_Certifications.length > 0 && (
-            <div>
-              <h4 className="font-bold mt-2">Recommended Certifications:</h4>
-              <ul className="list-disc pl-5">
-                {result.Recommended_Certifications.map((cert, index) => (
-                  <li key={index}>{cert}</li>
-                ))}
-              </ul>
-            </div>
-          )}
+          {result.Recommended_Certifications &&
+            result.Recommended_Certifications.length > 0 && (
+              <div>
+                <h4 className="font-bold mt-2">Recommended Certifications:</h4>
+                <ul className="list-disc pl-5">
+                  {result.Recommended_Certifications.map((cert, index) => (
+                    <li key={index}>{cert}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
         </div>
       )}
     </div>
