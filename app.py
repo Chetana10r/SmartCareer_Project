@@ -3,8 +3,10 @@ from flask_cors import CORS
 import pickle
 import re
 import spacy
+from PyPDF2 import PdfReader
+from sklearn.metrics.pairwise import cosine_similarity
 
-# Load pre-trained model
+# Load pre-trained model (used here only for TF-IDF vectorizer)
 with open("resume_model.pkl", "rb") as model_file:
     loaded_pipeline = pickle.load(model_file)
 
@@ -27,19 +29,19 @@ def extract_skills(text):
     skills = {skill for skill in common_skills if skill in text}
     return list(skills)
 
-# Define required skills for job roles
+# Define required skills for each job role
 job_required_skills = {
     "Data Science": {"python", "sql", "machine learning", "deep learning", "nlp", "pandas", "numpy"},
     "Software Developer": {"java", "c++", "javascript", "react", "nodejs", "html", "css"},
     "Cloud Engineer": {"aws", "azure", "gcp", "docker", "kubernetes", "cloud computing"},
 }
 
-def find_missing_skills(category, resume_skills):
-    """Identify missing skills for a candidate."""
-    required_skills = job_required_skills.get(category, set())
+def find_missing_skills(role, resume_skills):
+    """Identify missing skills based on the provided job role."""
+    required_skills = job_required_skills.get(role, set())
     return list(required_skills - set(resume_skills))
 
-# Define course recommendations
+# Define course recommendations based on missing skills
 course_recommendations = {
     "python": "Python for Everybody - Coursera",
     "sql": "SQL for Data Science - Udacity",
@@ -67,30 +69,95 @@ def recommend_courses(missing_skills):
     """Recommend courses based on missing skills."""
     return [course_recommendations[skill] for skill in missing_skills if skill in course_recommendations]
 
-# Flask API Setup
-app = Flask(__name__)
-CORS(app) 
+# -------------------------
+# New: Using Cosine Similarity for Job Role Prediction
+# -------------------------
+# Define reference texts for each job role based on required skills
+job_reference_text = {
+    "Data Science": "python sql machine learning deep learning nlp pandas numpy",
+    "Software Developer": "java c++ javascript react nodejs html css",
+    "Cloud Engineer": "aws azure gcp docker kubernetes cloud computing"
+}
 
-@app.route('/recommend', methods=['POST'])
-def recommend():
-    """API endpoint to recommend missing skills and courses."""
-    req_data = request.get_json()
-    resume_text = req_data.get("resume", "")
-    
-    if not resume_text:
-        return jsonify({"error": "Resume text is required"}), 400
-    
+# Retrieve the vectorizer from the loaded pipeline
+vectorizer = loaded_pipeline.named_steps['tfidf']
+
+def predict_role_by_cosine(resume_text, vectorizer, job_reference_text):
+    """Predict the job role using cosine similarity between the resume text and reference texts."""
+    resume_vector = vectorizer.transform([resume_text])
+    similarities = {}
+    for role, ref_text in job_reference_text.items():
+        ref_vector = vectorizer.transform([ref_text])
+        sim = cosine_similarity(resume_vector, ref_vector)[0][0]
+        similarities[role] = sim
+    best_role = max(similarities, key=similarities.get)
+    return best_role, similarities
+
+# -------------------------
+# Flask API Setup
+# -------------------------
+app = Flask(__name__)
+CORS(app)  # Allow cross-origin requests
+
+@app.route('/upload', methods=['POST'])
+def upload():
+    """
+    API endpoint to accept a PDF resume file and a job role.
+    It extracts the resume text, uses cosine similarity to predict the job role,
+    and then computes missing skills and recommends courses.
+    """
+    if 'resume' not in request.files:
+        return jsonify({"error": "No resume file provided"}), 400
+    resume_file = request.files['resume']
+    if resume_file.filename == "":
+        return jsonify({"error": "No file selected"}), 400
+
+    # Get the user-provided job role from the form data
+    user_job_role = request.form.get("job_role", "")
+    if not user_job_role:
+        return jsonify({"error": "Job role is required"}), 400
+
+    # Process the PDF file
+    if resume_file.filename.lower().endswith('.pdf'):
+        try:
+            reader = PdfReader(resume_file)
+            resume_text = ""
+            for page in reader.pages:
+                page_text = page.extract_text() or ""
+                print("Extracted text from page:", page_text)  # Debug print
+                resume_text += page_text
+            if not resume_text.strip():
+                return jsonify({"error": "No extractable text found in the PDF. Please upload a text-based PDF."}), 400
+        except Exception as e:
+            print("Error processing PDF:", e)
+            return jsonify({"error": "Error processing PDF file: " + str(e)}), 400
+    else:
+        return jsonify({"error": "Only PDF files are supported"}), 400
+
+
+    # Clean the extracted resume text
     cleaned_text = clean_text(resume_text)
-    predicted_category = loaded_pipeline.predict([cleaned_text])[0]
-    extracted_skills = extract_skills(resume_text)
-    missing_skills = find_missing_skills(predicted_category, extracted_skills)
-    recommended_courses = recommend_courses(missing_skills)
     
+    # Use cosine similarity to predict the job role based on resume content
+    predicted_category, similarity_scores = predict_role_by_cosine(cleaned_text, vectorizer, job_reference_text)
+
+    # For missing skills, you can choose either the predicted role or the one provided by the user.
+    # Here, we show both. We'll use the user provided role for computing missing skills.
+    used_role = user_job_role
+
+    extracted_skills = extract_skills(resume_text)
+    missing_skills = find_missing_skills(used_role, extracted_skills)
+    recommended_courses = recommend_courses(missing_skills)
+    recommended_certifications = []  # Placeholder for certifications if available
+
     return jsonify({
+        "User_Provided_Job_Role": user_job_role,
         "Predicted_Job_Category": predicted_category,
+        "Similarity_Scores": similarity_scores,
         "Extracted_Skills": extracted_skills,
         "Missing_Skills": missing_skills,
-        "Recommended_Courses": recommended_courses
+        "Recommended_Courses": recommended_courses,
+        "Recommended_Certifications": recommended_certifications
     })
 
 if __name__ == '__main__':

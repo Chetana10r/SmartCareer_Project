@@ -7,14 +7,17 @@ function ResumeRecommender() {
   const [result, setResult] = useState(null);
   const [loading, setLoading] = useState(false);
 
+  // Handle file upload change
   const handleFileChange = (event) => {
     setFile(event.target.files[0]);
   };
 
+  // Handle job role input change
   const handleRoleChange = (event) => {
     setJobRole(event.target.value);
   };
 
+  // Submit the resume and job role to the backend
   const submitResume = async () => {
     if (!file || !jobRole) {
       alert("Please upload a resume and enter the job role.");
@@ -45,7 +48,7 @@ function ResumeRecommender() {
       <input type="file" onChange={handleFileChange} className="mb-4" />
       <input 
         type="text" 
-        placeholder="Enter Job Role" 
+        placeholder="Enter the Job Role you are applying for" 
         value={jobRole} 
         onChange={handleRoleChange} 
         className="mb-4 p-2 border border-gray-300 rounded-md"
@@ -59,15 +62,31 @@ function ResumeRecommender() {
       </button>
       {result && (
         <div className="mt-4 w-96 p-4 border border-gray-200 rounded-md">
-          <h3 className="font-bold">Predicted Job Category: {result.Predicted_Job_Category}</h3>
-          <p><strong>Extracted Skills:</strong> {result.Extracted_Skills.join(", ")}</p>
-          <p><strong>Missing Skills:</strong> {result.Missing_Skills.join(", ")}</p>
+          <h3 className="font-bold">
+            Predicted Job Category: {result.Predicted_Job_Category}
+          </h3>
+          <p>
+            <strong>Extracted Skills:</strong> {result.Extracted_Skills.join(", ")}
+          </p>
+          <p>
+            <strong>Missing Skills:</strong> {result.Missing_Skills.join(", ")}
+          </p>
           <h4 className="font-bold mt-2">Recommended Courses:</h4>
           <ul className="list-disc pl-5">
             {result.Recommended_Courses.map((course, index) => (
               <li key={index}>{course}</li>
             ))}
           </ul>
+          {result.Recommended_Certifications && result.Recommended_Certifications.length > 0 && (
+            <div>
+              <h4 className="font-bold mt-2">Recommended Certifications:</h4>
+              <ul className="list-disc pl-5">
+                {result.Recommended_Certifications.map((cert, index) => (
+                  <li key={index}>{cert}</li>
+                ))}
+              </ul>
+            </div>
+          )}
         </div>
       )}
     </div>
@@ -75,4 +94,3 @@ function ResumeRecommender() {
 }
 
 export default ResumeRecommender;
-
