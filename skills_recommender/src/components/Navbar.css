@@ -1,0 +1,40 @@
+.navbar {
+    position: fixed;
+    top: 0;
+    width: 100%;
+    background: black;
+    color: white;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.8rem 2rem;
+    z-index: 1000;
+  }
+  
+  .navbar-brand {
+    font-size: 1.5rem;
+    font-weight: bold;
+    color: #00e0ff;
+  }
+  
+  .navbar-links {
+    display: flex;
+    list-style: none;
+    gap: 1rem;
+  }
+  
+  .navbar-links a {
+    color: #00e0ff;
+    text-decoration: none;
+  }
+  
+  .login-btn {
+    background: #00e0ff;
+    color: black;
+    border: none;
+    padding: 0.4rem 1rem;
+    border-radius: 20px;
+    font-weight: bold;
+    cursor: pointer;
+  }
+  
