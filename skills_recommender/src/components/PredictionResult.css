@@ -1,169 +1,118 @@
+/* PredictionResult.css */
 .result-container {
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    background-color: #111827; /* Dark background */
-    min-height: 100vh;
-    padding: 60px 20px;
+  padding: 40px 20px;
+  background-color: #000;
+  color: #fff;
+  min-height: 100vh;
+  box-sizing: border-box;
+}
+
+.result-heading {
+  text-align: center;
+  font-size: 2rem;
+  margin-bottom: 20px;
+  color: #00ffaa;
+  z-index: 2;
+  position: relative;
+}
+
+.card-scroll-container {
+  display: flex;
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  scroll-behavior: smooth;
+  padding: 20px 0;
+}
+
+.stylish-card {
+  flex: 0 0 33.33%;
+  background: #1a1a1a;
+  border-radius: 16px;
+  margin: 0 10px;
+  padding: 20px;
+  color: #fff;
+  text-align: center;
+  box-shadow: 0 0 10px #00ffaa50;
+  scroll-snap-align: start;
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+
+.stylish-card:hover {
+  transform: scale(1.05);
+  box-shadow: 0 0 20px #00ffaa;
+}
+
+.dots-container {
+  text-align: center;
+  margin-top: 20px;
+}
+
+.dot {
+  height: 12px;
+  width: 12px;
+  margin: 0 5px;
+  background-color: #bbb;
+  border-radius: 50%;
+  display: inline-block;
+  transition: background-color 0.3s ease;
+  cursor: pointer;
+}
+
+.dot.active {
+  background-color: #00ffaa;
+}
+
+.button-group {
+  display: flex;
+  justify-content: center;
+  margin-top: 30px;
+  gap: 20px;
+  flex-wrap: wrap;
+}
+
+.nav-button {
+  padding: 10px 20px;
+  background-color: #00ffaa;
+  color: #000;
+  font-weight: bold;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background-color 0.3s ease, transform 0.2s ease;
+  text-decoration: none;
+}
+.apply-btn {
+  text-decoration: none;
+  background-color: #4CAF50;
+  color: white;
+  padding: 12px 24px;
+  font-size: 16px;
+  border-radius: 8px;
+  transition: background-color 0.3s ease, transform 0.2s ease;
+  display: inline-block;
+}
+
+.apply-btn:hover {
+  background-color: #45a049;
+  transform: translateY(-2px);
+}
+
+.nav-button:hover {
+  background-color: #00ddaa;
+  transform: scale(1.05);
+}
+
+.fade-in {
+  animation: fadeIn 0.6s ease-in;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
   }
-  
-  .result-card {
-    background-color: #1f2937; /* Dark card background */
-    padding: 40px 30px;
-    border-radius: 20px;
-    box-shadow: 0 15px 40px rgba(0, 0, 0, 0.1);
-    width: 100%;
-    max-width: 1200px;
-    border: 3px solid #3b82f6; /* Blue border */
-    position: relative;
+  to {
+    opacity: 1;
+    transform: translateY(0);
   }
-  
-  .result-title {
-    font-size: 36px;
-    color: #ffffff;
-    margin-bottom: 30px;
-    text-align: center;
-    font-family: 'Roboto', sans-serif;
-    text-transform: uppercase;
-    letter-spacing: 2px;
-    font-weight: bold;
-  }
-  
-  .grid-container {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr); /* 3 columns in the first line */
-    gap: 20px;
-    margin-top: 20px;
-  }
-  
-  .card {
-    color: white;
-    border-radius: 15px;
-    padding: 20px;
-    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
-    transition: transform 0.3s ease, box-shadow 0.3s ease;
-  }
-  
-  .card:hover {
-    transform: translateY(-10px);
-    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.15);
-  }
-  
-  .card h3 {
-    font-size: 20px;
-    color: #ffffff;
-    margin-bottom: 15px;
-  }
-  
-  .card p,
-  .card ul {
-    font-size: 16px;
-    color: #d1d5db; /* Lighter text color for contrast */
-  }
-  
-  .card ul {
-    list-style-type: none;
-    padding-left: 0;
-  }
-  
-  .card li {
-    margin-bottom: 10px;
-  }
-  
-  /* Two-color alternate pattern for cards */
-  .domain-card {
-    background-color: #3b82f6; /* Blue background */
-  }
-  
-  .skills-card {
-    background-color: #10b981; /* Green background */
-  }
-  
-  .role-card {
-    background-color: #3b82f6; /* Blue background */
-  }
-  
-  .resume-skills-card {
-    background-color: #10b981; /* Green background */
-  }
-  
-  .missing-skills-card {
-    background-color: #3b82f6; /* Blue background */
-  }
-  
-  .recommendations-card {
-    background-color: #10b981; /* Green background */
-  }
-  
-  .action-buttons {
-    display: flex;
-    justify-content: space-between;
-    width: 100%;
-    margin-top: 30px;
-  }
-  
-  .back-button {
-    padding: 14px 26px;
-    background-color: #3b82f6;
-    color: white;
-    border: none;
-    border-radius: 12px;
-    cursor: pointer;
-    font-size: 18px;
-    transition: background-color 0.3s ease, transform 0.2s ease;
-  }
-  
-  .back-button:hover {
-    background-color: #2563eb;
-    transform: translateY(-3px);
-  }
-  
-  .apply-links a {
-    background-color: #3b82f6; /* Matching the blue */
-    text-decoration: none; /* No underline */
-    padding: 14px 26px; /* Same padding as Go Back button */
-  }
-  .apply-links a {
-    padding: 14px 26px;
-    background-color: #3b82f6; /* Blue background for consistency */
-    color: white;
-    border: none;
-    border-radius: 12px;
-    cursor: pointer;
-    font-size: 18px;
-    font-weight: 600;
-    transition: background-color 0.3s ease, transform 0.2s ease;
-  }
-  
-   .apply-links a:hover {
-    background-color: #2563eb; /* Darker blue for hover effect */
-    transform: translateY(-3px);
-  }
-  
-  /* Add responsive design for smaller screens */
-  @media (max-width: 768px) {
-    .result-container {
-      padding: 40px 10px;
-    }
-  
-    .result-card {
-      padding: 30px 20px;
-    }
-  
-    .result-title {
-      font-size: 28px;
-    }
-  
-    .label {
-      font-size: 16px;
-    }
-  
-    .value {
-      font-size: 16px;
-    }
-  
-    .back-button {
-      padding: 12px 24px;
-    }
-  }
-  
+}
