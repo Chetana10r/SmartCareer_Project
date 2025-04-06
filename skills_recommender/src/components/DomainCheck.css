@@ -1,108 +1,113 @@
-.home-container {
-    background: linear-gradient(to right, #000000, #1f1f1f);
-    color: white;
-    min-height: 100vh;
-    padding: 6rem 2rem 3rem; /* adjusted for fixed navbar and footer */
-    text-align: center;
-    font-family: 'Segoe UI', sans-serif;
-  }
-  
-  .hero {
-    margin-bottom: 2rem;
-  }
-  
-  .upload-card {
-    background: #121212;
-    padding: 2rem;
-    border-radius: 1rem;
-    box-shadow: 0 5px 15px rgba(255, 255, 255, 0.1);
-    max-width: 500px;
-    margin: auto;
-  }
-  
-  .upload-card input {
-    margin-top: 1rem;
-    margin-bottom: 1rem;
-  }
-  
-  .detect-btn {
-    background-color: #00e0ff;
-    color: black;
-    border: none;
-    padding: 0.6rem 1.5rem;
-    border-radius: 8px;
-    cursor: pointer;
-  }
-  
-  
-  @keyframes fadeIn {
-    from { opacity: 0; transform: translate(-50%, -60%); }
-    to { opacity: 1; transform: translate(-50%, -50%); }
-  }
-  
-  .testimonials {
-    margin-top: 3rem;
-  }
-  
-  .testimonial-card {
-    background: #1e1e1e;
-    color: white;
-    padding: 1rem;
-    margin: 1rem auto;
-    max-width: 500px;
-    border-radius: 0.5rem;
-    box-shadow: 0 0 10px rgba(255, 255, 255, 0.1);
-  }
+.domain-container {
+  background: linear-gradient(to right, #0f0c29, #302b63, #24243e);
+  color: white;
+  min-height: 100vh;
+  padding: 6rem 2rem 3rem;
+  text-align: center;
+  font-family: 'Segoe UI', sans-serif;
+}
 
-  .popup {
-    position: fixed;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    background: #00e0ff;
-    color: black;
-    padding: 1.5rem 2rem;
-    border-radius: 1rem;
-    box-shadow: 0 0 30px rgba(0, 224, 255, 0.6);
-    font-weight: bold;
-    z-index: 2000;
-    animation: fadeIn 0.5s ease;
-    cursor: pointer;
-  }
-  
-  .popup-confirmation {
-    margin-top: 1rem;
-    text-align: center;
-  }
-  
-  .proceed-btn {
-    background-color: #00e0ff;
-    color: black;
-    border: none;
-    padding: 0.6rem 1.5rem;
-    border-radius: 8px;
-    cursor: pointer;
-  }
-  
-  .proceed-btn:hover {
-    background-color: #1d4ed8;
-  }
-  
-  @keyframes fadeIn {
-    from { opacity: 0; transform: translate(-50%, -60%); }
-    to { opacity: 1; transform: translate(-50%, -50%); }
-  }
-  
-  
-  .footer {
-    position: fixed;
-    bottom: 0;
-    width: 100%;
-    padding: 1rem;
-    background: #111;
-    color: #aaa;
-    font-size: 0.9rem;
-    text-align: center;
-    z-index: 1000;
-  }
-  
+.hero h1 {
+  font-size: 2.5rem;
+  margin-bottom: 0.3rem;
+}
+
+.highlight-text {
+  color: #4ade80;
+  background: linear-gradient(to right, #4ade80, #22d3ee);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.upload-card {
+  background: rgba(255, 255, 255, 0.05);
+  padding: 2.5rem 2rem;
+  border-radius: 1.5rem;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.4);
+  max-width: 520px;
+  margin: 2rem auto;
+  transition: transform 0.3s;
+}
+
+.upload-card:hover {
+  transform: translateY(-4px);
+}
+
+.custom-upload-label {
+  display: inline-block;
+  background-color: #1e293b;
+  color: #fff;
+  padding: 0.6rem 1.3rem;
+  border-radius: 8px;
+  cursor: pointer;
+  border: 1px solid #4ade80;
+  transition: background-color 0.3s;
+  margin-top: 1rem;
+}
+
+.custom-upload-label:hover {
+  background-color: #334155;
+}
+
+.upload-card input[type="file"] {
+  display: none;
+}
+
+.file-name {
+  margin: 1rem 0;
+  font-size: 0.95rem;
+  color: #fbbf24;
+}
+
+.detect-btn {
+  background-color: #22d3ee;
+  color: black;
+  border: none;
+  padding: 0.65rem 1.6rem;
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: bold;
+  margin-top: 1.2rem;
+  transition: background-color 0.3s ease;
+}
+
+.detect-btn:hover {
+  background-color: #0ea5e9;
+}
+
+.popup {
+  margin-top: 2rem;
+  padding: 1.5rem;
+  background-color: #1e293b;
+  border: 2px dashed #22d3ee;
+  border-radius: 12px;
+  max-width: 400px;
+  margin-left: auto;
+  margin-right: auto;
+  cursor: pointer;
+  transition: background-color 0.3s;
+}
+
+.popup:hover {
+  background-color: #273549;
+}
+
+.popup-confirmation {
+  margin-top: 1rem;
+}
+
+.proceed-btn {
+  background-color: #4ade80;
+  color: black;
+  border: none;
+  padding: 0.5rem 1.3rem;
+  border-radius: 8px;
+  font-weight: bold;
+  margin-top: 0.7rem;
+  cursor: pointer;
+  transition: background-color 0.3s;
+}
+
+.proceed-btn:hover {
+  background-color: #22c55e;
+}

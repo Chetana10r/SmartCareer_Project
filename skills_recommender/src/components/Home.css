@@ -1,0 +1,102 @@
+.home-container {
+    position: relative;
+    height: 100vh;
+    background-image: url("https://www.mindinventory.com/blog/wp-content/uploads/2022/10/frontend-development-tools.png");
+    background-repeat: no-repeat;
+    background-size: cover;
+    background-position: center center;
+    color: white;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    padding: 2rem;
+    overflow: hidden;
+  }
+  
+  .overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.6);
+    z-index: 1;
+  }
+  
+  .home-content {
+    position: relative;
+    z-index: 2;
+    max-width: 900px;
+  }
+  
+  .home-title {
+    font-size: 3rem;
+    font-weight: bold;
+    margin-bottom: 1rem;
+    color: #00ffe7;
+    animation: fadeInDown 1s ease-in-out;
+  }
+  
+  .home-description {
+    font-size: 1.3rem;
+    margin-bottom: 2rem;
+    animation: fadeInUp 1.2s ease-in-out;
+    color: #e0f7fa;
+  }
+  
+  .career-btn {
+    background: linear-gradient(135deg, #00ffe7, #00bfa5);
+    color: #000;
+    padding: 0.9rem 2rem;
+    font-size: 1.1rem;
+    font-weight: 600;
+    border: none;
+    border-radius: 50px;
+    cursor: pointer;
+    box-shadow: 0 8px 18px rgba(0, 255, 231, 0.3);
+    transition: all 0.3s ease;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.6rem;
+  }
+  
+  .career-btn:hover {
+    background: linear-gradient(135deg, #00e6c1, #009f8b);
+    transform: scale(1.07);
+    box-shadow: 0 10px 24px rgba(0, 255, 231, 0.45);
+  }
+  
+  @keyframes fadeInDown {
+    from {
+      opacity: 0;
+      transform: translateY(-40px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+  
+  @keyframes fadeInUp {
+    from {
+      opacity: 0;
+      transform: translateY(40px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+  
+  @media (max-width: 768px) {
+    .home-title {
+      font-size: 2.2rem;
+    }
+  
+    .home-description {
+      font-size: 1.1rem;
+    }
+  }
+  
