@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, render_template
 from flask_cors import CORS
 import joblib
 import pandas as pd
@@ -218,6 +218,9 @@ def proceed_prediction():
         print("❌ Prediction Error:", str(e))
         return jsonify({"error": str(e)}), 500
 
+@app.route('/')
+def home():
+    return render_template('index.html')
 
 
 # Run server
