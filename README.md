@@ -35,6 +35,17 @@ Built using **ReactJS** (Frontend), **Flask** (Backend), and **Machine Learning 
 | HTML/CSS/JS     | Flask-CORS     | spaCy, sklearn, pandas    | Animations, Dots Carousel |
 
 ---
+### 🔄 TL;DR Summary
+
+| `.pkl` File                 | Created In               | Purpose                               | Trained On              |
+|----------------------------|--------------------------|----------------------------------------|--------------------------|
+| `IT_cert_model.pkl`        | `course_cert_IT.ipynb`   | Recommend certifications for IT        | Missing IT skills        |
+| `nonit_cert_model.pkl`     | `course_cert_NON_IT.ipynb` | Recommend certifications for Non-IT   | Missing Non-IT skills    |
+| `IT_role_model.pkl`        | `Role_IT.ipynb`          | Predict IT job roles                   | Skill labels             |
+| `nonit_role_model.pkl`     | `Role_NON_IT.ipynb`      | Predict Non-IT job roles               | Skill labels             |
+| `IT_skill_model.pkl`       | `Skills_IT.ipynb`        | Predict IT skills from resume          | Resume text              |
+| `nonit_skill_model.pkl`    | `Skills_NON_IT.ipynb`    | Predict Non-IT skills from resume      | Resume text              |
+---
 
 ## 📁 Project Structure
 
