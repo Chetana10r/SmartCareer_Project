@@ -5,6 +5,9 @@ function JobOpenings({ jobRole }) {
   const [jobs, setJobs] = useState([]);
   const [loading, setLoading] = useState(true);
 
+  const DEFAULT_LOCATION = "remote";
+  const DEFAULT_MIN_SALARY = "30000";
+
   useEffect(() => {
     const fetchJobs = async () => {
       try {
@@ -13,10 +16,10 @@ function JobOpenings({ jobRole }) {
           headers: {
             "Content-Type": "application/json",
           },
-          body: JSON.stringify({ 
+          body: JSON.stringify({
             job_role: jobRole,
-            location: "remote",
-            salary_min: "30000"
+            location: DEFAULT_LOCATION,
+            salary_min: DEFAULT_MIN_SALARY,
           }),
         });
 
@@ -39,19 +42,25 @@ function JobOpenings({ jobRole }) {
   return (
     <div className="job-openings">
       <h2>Job Openings for: {jobRole || "..."}</h2>
+
       {loading ? (
-        <p>Loading job listings...</p>
+        <div className="loading-spinner">
+          <div className="spinner"></div>
+          <p>Loading job listings...</p>
+        </div>
       ) : jobs.length === 0 ? (
         <p>No job openings found.</p>
       ) : (
         <div className="job-cards">
           {jobs.map((job, index) => (
             <div key={index} className="job-card">
-              <h3>{job.title}</h3>
-              <p><strong>Company:</strong> {job.company}</p>
-              <p><strong>Location:</strong> {job.location}</p>
+              <h3>{job.title || "No title available"}</h3>
+              <p><strong>Company:</strong> {job.company || "N/A"}</p>
+              <p><strong>Location:</strong> {job.location || "Remote/Unknown"}</p>
               <p>
-                <strong>Salary:</strong> {job.salary_min} - {job.salary_max}
+                <strong>Salary:</strong>{" "}
+                {job.salary_min ? `${job.salary_min}` : "Not specified"} -{" "}
+                {job.salary_max ? `${job.salary_max}` : "Not specified"}
               </p>
               <a href={job.url} target="_blank" rel="noopener noreferrer">
                 View Job
