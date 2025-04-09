@@ -1,40 +1,66 @@
 .course-recommendations-container {
-    padding: 20px;
-    background-color: #f5f9ff;
-    border-radius: 12px;
-    margin-top: 30px;
-    box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
-  }
-  
-  .course-card-container {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 20px;
-    margin-top: 15px;
-  }
-  
-  .course-card {
-    background-color: #ffffff;
-    padding: 20px;
-    border-radius: 10px;
-    width: 260px;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
-    text-align: center;
-  }
-  
-  .course-card h4 {
-    margin-bottom: 10px;
-    font-size: 18px;
-    color: #333;
-  }
-  
-  .course-card a {
-    color: #007bff;
-    text-decoration: none;
-    font-weight: bold;
-  }
-  
-  .course-card a:hover {
-    text-decoration: underline;
-  }
-  
+  padding: 30px;
+  background: linear-gradient(to right, #e8f0ff, #f9fafe);
+  border-radius: 15px;
+  margin-top: 30px;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.12);
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+}
+
+.course-recommendations-container h2 {
+  text-align: center;
+  color: #003366;
+  margin-bottom: 25px;
+}
+
+.course-card-container {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 25px;
+}
+
+.course-card {
+  background: #ffffff;
+  border-radius: 12px;
+  width: 270px;
+  padding: 25px 20px;
+  text-align: center;
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.1);
+  border-top: 5px solid #007bff;
+}
+
+.course-card:hover {
+  transform: translateY(-10px);
+  box-shadow: 0 10px 22px rgba(0, 0, 0, 0.15);
+  border-top: 5px solid #0056b3;
+}
+
+.course-card h4 {
+  font-size: 18px;
+  color: #002244;
+  margin-bottom: 10px;
+}
+
+.course-card p {
+  font-size: 15px;
+  color: #555;
+  margin-bottom: 12px;
+}
+
+.course-card a {
+  display: inline-block;
+  margin-top: 10px;
+  color: white;
+  background-color: #007bff;
+  padding: 8px 16px;
+  text-decoration: none;
+  border-radius: 6px;
+  font-weight: bold;
+  transition: background-color 0.3s ease;
+}
+
+.course-card a:hover {
+  background-color: #0056b3;
+}
