@@ -1,7 +1,8 @@
-// PredictionResult.js
 import React, { useState, useRef, useEffect } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import "./PredictionResult.css";
+import JobOpenings from "./JobOpenings";
+import CourseRecommendations from "./CourseRecommendations";
 
 function PredictionResult() {
   const location = useLocation();
@@ -9,6 +10,8 @@ function PredictionResult() {
   const navigate = useNavigate();
   const [currentIndex, setCurrentIndex] = useState(0);
   const scrollContainerRef = useRef(null);
+  const [showJobs, setShowJobs] = useState(false);
+  const [showCourses, setShowCourses] = useState(false);
 
   const cards = [
     {
@@ -96,13 +99,32 @@ function PredictionResult() {
       </div>
 
       <div className="button-group">
-        <a href="https://www.naukri.com" target="_blank" rel="noopener noreferrer" className="apply-btn">
-          💼 Apply for Jobs
-        </a>
-        <a href="https://www.coursera.org" target="_blank" rel="noopener noreferrer" className="apply-btn">
+        <button
+          onClick={() => {
+            setShowJobs(!showJobs);
+            setShowCourses(false); // Close courses when Jobs is opened
+          }}
+          className="apply-btn"
+        >
+          💼 View Job Openings
+        </button>
+
+        <button
+          onClick={() => {
+            setShowCourses(!showCourses);
+            setShowJobs(false); // Close jobs when Courses is opened
+          }}
+          className="apply-btn"
+        >
           📚 Apply for Courses
-        </a>
+        </button>
       </div>
+
+      {showJobs && <JobOpenings jobRole={result?.predicted_role} />}
+
+      {showCourses && result?.recommendation?.course && (
+        <CourseRecommendations courseQuery={result.recommendation.course} />
+      )}
     </div>
   );
 }
