@@ -44,7 +44,7 @@ function Login() {
             name="email"
             value={formData.email}
             onChange={handleChange}
-            placeholder="Email ID"
+            placeholder="Email"
             required
           />
           <input
@@ -57,17 +57,15 @@ function Login() {
             required
           />
 
+          {!isSignup && (
+            <a href="/reset-password" style={styles.forgot}>
+              Forgot Password?
+            </a>
+          )}
+
           <button type="submit" style={styles.button}>
             {isSignup ? "Sign Up" : "Login"}
           </button>
-
-          {!isSignup && (
-            <p style={styles.forgot}>
-              <a href="/reset-password" className="forgot-password-link">
-                Forgot Password?
-              </a>
-            </p>
-          )}
         </form>
 
         <p style={styles.toggle}>
@@ -83,67 +81,66 @@ function Login() {
 
 const styles = {
   container: {
-    background: "linear-gradient(to right, #141e30, #243b55)",
-    minHeight: "100vh",
+    background: "linear-gradient(to right,rgb(25, 43, 77),rgb(1, 18, 49))",
+    height: "100vh",
     display: "flex",
     justifyContent: "center",
     alignItems: "center",
     fontFamily: "Segoe UI, sans-serif",
+    padding: "1rem",
   },
   card: {
     background: "#fff",
-    borderRadius: "1.5rem",
-    boxShadow: "0 0 30px rgba(0,0,0,0.2)",
-    padding: "3rem 2.5rem",
+    borderRadius: "1rem",
+    padding: "2rem",
+    boxShadow: "0 10px 30px rgba(3, 1, 23, 0.31)",
     width: "100%",
-    maxWidth: "400px",
+    maxWidth: "320px",
     textAlign: "center",
-    marginTop: "80px",
   },
   heading: {
-    marginBottom: "1.5rem",
-    fontSize: "1.8rem",
-    color: "#243b55",
+    marginBottom: "1rem",
+    fontSize: "1.5rem",
+    color: "#1e3c72",
   },
   form: {
     display: "flex",
     flexDirection: "column",
-    gap: "1rem",
+    gap: "0.75rem",
   },
   input: {
-    padding: "0.8rem 1rem",
-    borderRadius: "0.5rem",
+    padding: "0.6rem",
+    borderRadius: "0.4rem",
     border: "1px solid #ccc",
-    fontSize: "1rem",
+    fontSize: "0.95rem",
   },
   button: {
-    padding: "0.8rem",
-    backgroundColor: "#243b55",
-    color: "white",
+    padding: "0.6rem",
+    backgroundColor: "#1e3c72",
+    color: "#fff",
     border: "none",
-    borderRadius: "0.5rem",
+    borderRadius: "0.4rem",
     cursor: "pointer",
-    fontWeight: "bold",
-    fontSize: "1rem",
-    transition: "0.3s",
+    fontWeight: "600",
+    fontSize: "0.95rem",
+    marginTop: "0.5rem",
   },
   forgot: {
-    marginTop: "0.5rem",
-    fontSize: "0.9rem",
-  },
-  link: {
-    color: "#243b55",
+    textAlign: "right",
+    fontSize: "0.8rem",
+    color: "#1e3c72",
     textDecoration: "none",
-    fontWeight: "bold",
+    marginBottom: "0.5rem",
+    display: "block",
   },
   toggle: {
-    marginTop: "1.5rem",
-    fontSize: "0.95rem",
-    color: "#555",
+    marginTop: "1rem",
+    fontSize: "0.85rem",
+    color: "#444",
   },
   switchLink: {
-    color: "#243b55",
-    fontWeight: "bold",
+    color: "#1e3c72",
+    fontWeight: "600",
     cursor: "pointer",
     textDecoration: "underline",
   },
