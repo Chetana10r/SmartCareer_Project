@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify, render_template
+from flask import Flask, request, jsonify, render_template, send_file
 from flask_cors import CORS
 import joblib
 import re
@@ -9,12 +9,25 @@ import pytesseract
 from PIL import Image
 import fitz  # PyMuPDF
 import io
-from pdf2image import convert_from_bytes
 import requests
 import feedparser
+import json
+import yake
+import os
+from pdf2image import convert_from_bytes  # ✅ added
+from models.fixed_template_renderer import FixedTemplateRenderer
+import logging
+logging.basicConfig(level=logging.INFO)
 
 app = Flask(__name__)
 CORS(app)
+
+# Hugging Face API setup
+HF_API_TOKEN = os.getenv("HF_API_TOKEN")  # ✅ secure way (set in env vars)
+HF_API_URL = "https://api-inference.huggingface.co/models/google/flan-t5-small"  # ✅ free model
+
+if not HF_API_TOKEN:
+    app.logger.error("HF_API_TOKEN not set! Run: setx HF_API_TOKEN your_token")
 
 # Tesseract OCR path
 pytesseract.pytesseract.tesseract_cmd = r"C:\Program Files\Tesseract-OCR\tesseract.exe"
@@ -63,32 +76,63 @@ def detect_domain(text):
     nonit_score = sum(skill in text for skill in NON_IT_SKILL_LIST)
     return "IT" if it_score >= nonit_score else "Non-IT"
 
+# -----------------------------
+# PDF Text Extraction
+# -----------------------------
 def extract_text_from_pdf(file):
+    text = ""
+
+    # First try PyMuPDF
     try:
-        pdf_bytes = file.read()
-        doc = fitz.open(stream=pdf_bytes, filetype="pdf")
-        text = "".join([page.get_text() for page in doc])
-        doc.close()
+        file.seek(0)  # ✅ reset before reading
+        doc = fitz.open(stream=file.read(), filetype="pdf")
+        text = "".join(page.get_text() or "" for page in doc)
         if text.strip():
             return text
-
-        with pdfplumber.open(io.BytesIO(pdf_bytes)) as pdf:
-            text = "".join([page.extract_text() or "" for page in pdf.pages])
-        if text.strip():
-            return text
-
-        images = convert_from_bytes(pdf_bytes)
-        ocr_text = ""
-        for img in images:
-            img = img.convert("RGB")
-            ocr_text += pytesseract.image_to_string(img)
-
-        if not ocr_text.strip():
-            raise ValueError("Unable to extract text from PDF. Try uploading a clearer file.")
-        return ocr_text
-
     except Exception as e:
-        raise ValueError(f"OCR/PDF extraction failed: {str(e)}")
+        app.logger.warning(f"fitz failed: {e}")
+
+    # Fallback: pdfplumber
+    try:
+        file.seek(0)  # ✅ reset before pdfplumber
+        with pdfplumber.open(file) as pdf:
+            for page in pdf.pages:
+                text += page.extract_text() or ""
+        if text.strip():
+            return text
+    except Exception as e:
+        app.logger.warning(f"pdfplumber failed: {e}")
+
+    # Final fallback: OCR
+    try:
+        file.seek(0)  # ✅ reset before OCR
+        images = convert_from_bytes(file.read())
+        for img in images:
+            text += pytesseract.image_to_string(img)
+    except Exception as e:
+        app.logger.error(f"OCR failed: {e}")
+
+    return text.strip()
+
+# -----------------------------
+# Hugging Face Model Caller
+# -----------------------------
+def call_hf_model(prompt, model_url):
+    if not HF_API_TOKEN:
+        raise ValueError("Missing Hugging Face API token. Set HF_API_TOKEN in environment variables.")
+
+    response = requests.post(
+        model_url,
+        headers={"Authorization": f"Bearer {HF_API_TOKEN}"},
+        json={"inputs": prompt}
+    )
+
+    if response.status_code == 403:
+        raise PermissionError(f"Access denied for {model_url}. Check if model is gated or token is invalid.")
+
+    response.raise_for_status()
+    return response.json()
+
 
 
 # -------------------- Routes --------------------
@@ -223,7 +267,89 @@ def scrape_jobs():
         return jsonify({"error": "Failed to fetch jobs", "details": str(e)}), 500
 
 
-# -------------------- Main --------------------
+# -----------------------------
+# Resume Optimization Endpoint
+# -----------------------------
+@app.route('/optimize_resume', methods=['POST'])
+def optimize_resume():
+    if 'resume' not in request.files:
+        return jsonify({"error": "No resume uploaded"}), 400
 
-if __name__ == "__main__":
-    app.run(debug=True, port=5000)
+    resume_file = request.files['resume']
+    job_description = request.form.get('job_description', '')
+    additional_info = json.loads(request.form.get('additional_info', '{}'))
+
+    # Extract resume text
+    resume_text = extract_text_from_pdf(resume_file)
+
+    # Build prompt
+    prompt = f"""
+    Resume Text:
+    {resume_text}
+
+    Job Description:
+    {job_description}
+
+    Personal Info:
+    {additional_info}
+
+    Please generate JSON with:
+    {{
+      "summary": "Professional summary tailored to job",
+      "skills": ["skill1", "skill2"]
+    }}
+    """
+
+    try:
+        # Try primary model
+        try:
+            hf_response = call_hf_model(prompt, HF_API_URL)
+        except PermissionError:
+            # Fallback model (completely free)
+            fallback_url = "https://api-inference.huggingface.co/models/facebook/bart-large-cnn"
+            app.logger.warning("403 Forbidden from Hugging Face. Falling back to bart-large-cnn.")
+            hf_response = call_hf_model(prompt, fallback_url)
+
+        # Parse response
+        if isinstance(hf_response, list) and "generated_text" in hf_response[0]:
+            raw_text = hf_response[0]["generated_text"]
+        elif isinstance(hf_response, dict):
+            raw_text = hf_response.get("generated_text") or hf_response.get("summary_text") or str(hf_response)
+        else:
+            raw_text = str(hf_response)
+
+        # Extract JSON safely
+        json_match = re.search(r'(\{.*\})', raw_text, re.DOTALL)
+        json_text = json_match.group(1) if json_match else "{}"
+        parsed = json.loads(json_text)
+
+        optimized_resume = {
+            "personal_info": additional_info,
+            "professional_summary": parsed.get("summary", ""),
+            "skills": parsed.get("skills", []),
+            "experience": [],
+            "education": [],
+            "projects": [],
+            "certifications": []
+        }
+
+        # Ensure static directory exists
+        if not os.path.exists('static'):
+            os.makedirs('static')
+
+        # Render PDF
+        renderer = FixedTemplateRenderer()
+        pdf_path = renderer.render_resume(optimized_resume)
+
+        return send_file(pdf_path, as_attachment=True, download_name="optimized_resume.pdf")
+
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({"error": str(e)}), 500
+
+# -----------------------------
+# Run App
+# -----------------------------
+if __name__ == '__main__':
+    app.run(debug=True)

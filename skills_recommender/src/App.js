@@ -12,6 +12,7 @@ import Footer from "./components/Footer";
 import Testimonials from "./components/Testimonials";
 import Contact from "./components/Contact";
 import Login from "./components/Login";
+import ResumeOptimizer from './components/ResumeOptimizer';
 
 
 import './App.css';
@@ -31,6 +32,7 @@ function App() {
             <Route path="/testimonials" element={<Testimonials />} />
             <Route path="/contact" element={<Contact />} />
             <Route path="/login" element={<Login />} />
+            <Route path="/resume-optimizer" element={<ResumeOptimizer />} />
           </Routes>
         </div>
         <Footer />

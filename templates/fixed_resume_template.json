@@ -1,0 +1,164 @@
+{
+  "template_name": "Fixed Professional Format",
+  "version": "1.0",
+  "description": "Standardized resume format with consistent structure",
+
+  "layout_settings": {
+    "page_size": "A4",
+    "margins": {
+      "top": 0.75,
+      "bottom": 0.75,
+      "left": 0.75,
+      "right": 0.75
+    },
+    "line_spacing": 1.2,
+    "section_spacing": 0.3
+  },
+
+  "typography": {
+    "fonts": {
+      "name": "Helvetica-Bold",
+      "heading": "Helvetica-Bold",
+      "subheading": "Helvetica-Bold",
+      "body": "Helvetica",
+      "emphasis": "Helvetica-Bold"
+    },
+    "sizes": {
+      "name": 24,
+      "heading": 16,
+      "subheading": 14,
+      "body": 11,
+      "contact": 10
+    }
+  },
+
+  "colors": {
+    "primary": "#2C3E50",
+    "secondary": "#34495E",
+    "accent": "#3498DB",
+    "text": "#000000",
+    "background": "#FFFFFF"
+  },
+
+  "sections": [
+    {
+      "name": "header",
+      "order": 1,
+      "required": true,
+      "style": "centered",
+      "components": ["full_name", "contact_info", "professional_links"],
+      "formatting": {
+        "name_size": 24,
+        "contact_separator": " | ",
+        "alignment": "center"
+      }
+    },
+    {
+      "name": "professional_summary",
+      "order": 2,
+      "required": true,
+      "style": "paragraph",
+      "max_length": 250,
+      "formatting": {
+        "header_text": "PROFESSIONAL SUMMARY",
+        "header_style": "underlined"
+      }
+    },
+    {
+      "name": "technical_skills",
+      "order": 3,
+      "required": true,
+      "style": "categorized",
+      "categories": ["Programming Languages", "Frameworks", "Databases", "Tools & Platforms"],
+      "formatting": {
+        "header_text": "TECHNICAL SKILLS",
+        "category_separator": ": ",
+        "skill_separator": ", ",
+        "max_skills_per_category": 8
+      }
+    },
+    {
+      "name": "professional_experience",
+      "order": 4,
+      "required": true,
+      "style": "chronological_reverse",
+      "max_positions": 5,
+      "formatting": {
+        "header_text": "PROFESSIONAL EXPERIENCE",
+        "job_title_style": "bold",
+        "company_separator": " | ",
+        "date_format": "MMM YYYY",
+        "bullet_style": "•",
+        "max_bullets": 6,
+        "bullet_indent": 0.25
+      }
+    },
+    {
+      "name": "education",
+      "order": 5,
+      "required": true,
+      "style": "standard",
+      "formatting": {
+        "header_text": "EDUCATION",
+        "degree_style": "bold",
+        "institution_separator": " | ",
+        "show_gpa": false
+      }
+    },
+    {
+      "name": "key_projects",
+      "order": 6,
+      "required": false,
+      "style": "project_list",
+      "max_projects": 4,
+      "formatting": {
+        "header_text": "KEY PROJECTS",
+        "project_title_style": "bold",
+        "tech_label": "Technologies: ",
+        "description_max_length": 150
+      }
+    },
+    {
+      "name": "certifications",
+      "order": 7,
+      "required": false,
+      "style": "simple_list",
+      "formatting": {
+        "header_text": "CERTIFICATIONS",
+        "date_format": "YYYY",
+        "separator": " - "
+      }
+    }
+  ],
+
+  "formatting_rules": {
+    "section_headers": {
+      "style": "uppercase",
+      "decoration": "underline",
+      "color": "primary",
+      "spacing_after": 0.2
+    },
+    "bullet_points": {
+      "symbol": "•",
+      "indent": 0.25,
+      "spacing": 0.1
+    },
+    "dates": {
+      "format": "MMM YYYY",
+      "alignment": "right",
+      "style": "normal"
+    },
+    "contact_info": {
+      "email_style": "normal",
+      "phone_format": "(XXX) XXX-XXXX",
+      "link_style": "underline"
+    }
+  },
+
+  "content_optimization": {
+    "summary_keywords": ["experienced", "skilled", "proven track record", "expertise"],
+    "action_verbs": ["developed", "implemented", "designed", "managed", "led", "created", "optimized"],
+    "skill_prioritization": "match_job_requirements",
+    "experience_focus": "relevant_achievements"
+  }
+}

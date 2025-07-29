@@ -1,6 +1,6 @@
 import React from "react";
 import { Link } from "react-router-dom";
-import { FaRocket, FaMagic } from "react-icons/fa";
+import { FaRocket, FaMagic, FaFileAlt } from "react-icons/fa";
 import "./Home.css";
 
 function Home() {
@@ -18,6 +18,10 @@ function Home() {
         <div className="home-buttons">
           <Link to="/domain-check" className="career-btn">
             <FaMagic /> Check My Career
+          </Link>
+          {/* New Resume Optimizer Link */}
+          <Link to="/resume-optimizer" className="career-btn" style={{ marginLeft: "15px" }}>
+            <FaFileAlt /> Resume Optimizer
           </Link>
         </div>
       </div>
