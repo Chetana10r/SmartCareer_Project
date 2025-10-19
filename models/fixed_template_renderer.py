@@ -4,54 +4,132 @@ from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.units import inch
 from reportlab.lib import colors
-from reportlab.lib.enums import TA_CENTER
+from reportlab.lib.enums import TA_LEFT, TA_RIGHT
 from datetime import datetime
 import os
 
 class FixedTemplateRenderer:
     def __init__(self, template_path="templates/fixed_resume_template.json"):
-        with open(template_path, 'r') as f:
-            self.template = json.load(f)
+        try:
+            with open(template_path, 'r') as f:
+                self.template = json.load(f)
+        except FileNotFoundError:
+            # Use default template if file not found
+            self.template = self._get_default_template()
         self.styles = self._create_custom_styles()
+
+    def _get_default_template(self):
+        """Fallback template matching Chetana's format"""
+        return {
+            "typography": {
+                "fonts": {
+                    "name": "Helvetica-Bold", 
+                    "heading": "Helvetica-Bold", 
+                    "subheading": "Helvetica-Bold",
+                    "body": "Helvetica"
+                },
+                "sizes": {
+                    "name": 16, 
+                    "contact": 10, 
+                    "heading": 12,
+                    "section_header": 12, 
+                    "subheading": 11,
+                    "body": 10
+                }
+            },
+            "colors": {"primary": "#000000"},
+            "layout_settings": {
+                "margins": {"top": 0.6, "bottom": 0.6, "left": 0.75, "right": 0.75}, 
+                "line_spacing": 1.15,
+                "section_spacing": 0.15
+            }
+        }
 
     def _create_custom_styles(self):
         styles = {}
-        base = getSampleStyleSheet()
-
-        # Colors
-        primary_color = colors.HexColor(self.template['colors']['primary'])
         
-        # Name style
-        styles['Name'] = ParagraphStyle('Name', fontName=self.template['typography']['fonts']['name'],
-                                        fontSize=self.template['typography']['sizes']['name'],
-                                        alignment=TA_CENTER, spaceAfter=6, textColor=primary_color)
+        # Name style (Bold, larger)
+        styles['Name'] = ParagraphStyle(
+            'Name',
+            fontName='Helvetica-Bold',
+            fontSize=self.template['typography']['sizes']['name'],
+            alignment=TA_LEFT,
+            spaceAfter=2,
+            leading=16
+        )
 
-        # Contact style
-        styles['Contact'] = ParagraphStyle('Contact', fontName=self.template['typography']['fonts']['body'],
-                                           fontSize=self.template['typography']['sizes']['contact'],
-                                           alignment=TA_CENTER, spaceAfter=12)
+        # Contact info style
+        styles['Contact'] = ParagraphStyle(
+            'Contact',
+            fontName='Helvetica',
+            fontSize=self.template['typography']['sizes']['contact'],
+            alignment=TA_LEFT,
+            spaceAfter=1,
+            leading=12
+        )
 
-        # Section header style
-        styles['SectionHeader'] = ParagraphStyle('SectionHeader', fontName=self.template['typography']['fonts']['heading'],
-                                                 fontSize=self.template['typography']['sizes']['heading'],
-                                                 textColor=primary_color, spaceAfter=self.template['layout_settings']['section_spacing']*72,
-                                                 borderWidth=1, borderColor=primary_color, borderPadding=2)
+        # Section header style (Bold)
+        styles['SectionHeader'] = ParagraphStyle(
+            'SectionHeader',
+            fontName='Helvetica-Bold',
+            fontSize=self.template['typography']['sizes']['section_header'],
+            alignment=TA_LEFT,
+            spaceBefore=12,
+            spaceAfter=6,
+            leading=14
+        )
 
         # Body text style
-        styles['Body'] = ParagraphStyle('Body', fontName=self.template['typography']['fonts']['body'],
-                                        fontSize=self.template['typography']['sizes']['body'],
-                                        leading=self.template['typography']['sizes']['body'] * self.template['layout_settings']['line_spacing'],
-                                        spaceAfter=6)
+        styles['Body'] = ParagraphStyle(
+            'Body',
+            fontName='Helvetica',
+            fontSize=self.template['typography']['sizes']['body'],
+            alignment=TA_LEFT,
+            leftIndent=15,
+            spaceAfter=4,
+            leading=12
+        )
 
-        # Job header style
-        styles['JobHeader'] = ParagraphStyle('JobHeader', fontName=self.template['typography']['fonts']['subheading'],
-                                             fontSize=self.template['typography']['sizes']['subheading'], spaceAfter=4)
+        # Sub-bullet style (deeper indent)
+        styles['SubBullet'] = ParagraphStyle(
+            'SubBullet',
+            fontName='Helvetica',
+            fontSize=self.template['typography']['sizes']['body'],
+            alignment=TA_LEFT,
+            leftIndent=30,
+            spaceAfter=4,
+            leading=12
+        )
+
+        # Institution/Company header
+        styles['InstitutionHeader'] = ParagraphStyle(
+            'InstitutionHeader',
+            fontName='Helvetica-Bold',
+            fontSize=self.template['typography']['sizes']['body'],
+            alignment=TA_LEFT,
+            leftIndent=15,
+            spaceAfter=2,
+            leading=12
+        )
+
+        # Project/Position title
+        styles['ProjectTitle'] = ParagraphStyle(
+            'ProjectTitle',
+            fontName='Helvetica-Bold',
+            fontSize=self.template['typography']['sizes']['body'],
+            alignment=TA_LEFT,
+            leftIndent=15,
+            spaceAfter=2,
+            leading=12
+        )
 
         return styles
 
     def render_resume(self, resume_data, output_path=None):
+        """Generate PDF resume from data"""
         if not output_path:
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            os.makedirs('static', exist_ok=True)
             output_path = f"static/resume_{timestamp}.pdf"
 
         margins = self.template['layout_settings']['margins']
@@ -65,161 +143,321 @@ class FixedTemplateRenderer:
         )
 
         story = []
-        # Sort and render sections by order
-        sections = sorted(self.template['sections'], key=lambda x: x['order'])
-        for section in sections:
-            if section['required'] or resume_data.get(section['name']):
-                self._render_section(story, section, resume_data)
+        
+        # Render sections in order
+        self._render_header(story, resume_data)
+        self._render_education(story, resume_data)
+        self._render_projects(story, resume_data)
+        self._render_research(story, resume_data)
+        self._render_technical_skills(story, resume_data)
+        self._render_certifications(story, resume_data)
+        self._render_achievements(story, resume_data)
+        self._render_experience(story, resume_data)
 
         doc.build(story)
         return output_path
 
-    def _render_section(self, story, section_config, resume_data):
-        section_name = section_config['name']
-        if section_name == 'header': self._render_header(story, section_config, resume_data)
-        elif section_name == 'professional_summary': self._render_summary(story, section_config, resume_data)
-        elif section_name == 'technical_skills': self._render_skills(story, section_config, resume_data)
-        elif section_name == 'professional_experience': self._render_experience(story, section_config, resume_data)
-        elif section_name == 'education': self._render_education(story, section_config, resume_data)
-        elif section_name == 'key_projects': self._render_projects(story, section_config, resume_data)
-        elif section_name == 'certifications': self._render_certifications(story, section_config, resume_data)
-        # Extend as needed for other sections
-
-    def _render_header(self, story, config, data):
+    def _render_header(self, story, data):
+        """Render name and contact info"""
         personal_info = data.get('personal_info', {})
-        story.append(Paragraph(personal_info.get('name',''), self.styles['Name']))
-
-        # Contact info
-        contact_parts = []
-        if personal_info.get('email'): contact_parts.append(personal_info['email'])
-        if personal_info.get('phone'): contact_parts.append(personal_info['phone'])
-        if personal_info.get('location'): contact_parts.append(personal_info['location'])
-        separator = config['formatting']['contact_separator']
-        contact_line = separator.join(contact_parts)
-        story.append(Paragraph(contact_line, self.styles['Contact']))
-
-        # Links (LinkedIn, GitHub, Website)
+        
+        # Name
+        name = personal_info.get('name', 'Full Name')
+        phone = personal_info.get('phone', '+91-XXXXXXXXXX')
+        story.append(Paragraph(f"<b>{name}</b> {phone}", self.styles['Name']))
+        
+        # Email line
+        email = personal_info.get('email', 'email@example.com')
+        location = personal_info.get('location', 'City, Country')
+        story.append(Paragraph(f"Email: {email}  Location: {location}", self.styles['Contact']))
+        
+        # LinkedIn and GitHub
+        linkedin = personal_info.get('linkedin', '')
+        github = personal_info.get('github', '')
         links = []
-        for link_type in ['linkedin', 'github', 'website']:
-            if personal_info.get(link_type):
-                links.append(f'<a href="{personal_info[link_type]}">{link_type.title()}</a>')
+        if linkedin:
+            links.append(f"LinkedIn: {linkedin}")
+        if github:
+            links.append(f"GitHub: {github}")
+        
         if links:
-            links_line = separator.join(links)
-            story.append(Paragraph(links_line, self.styles['Contact']))
+            story.append(Paragraph("  ".join(links), self.styles['Contact']))
+        
+        story.append(Spacer(1, 8))
 
-        story.append(Spacer(1, 15))
-
-    def _render_summary(self, story, config, data):
-        header_text = config['formatting']['header_text']
-        story.append(Paragraph(header_text, self.styles['SectionHeader']))
-        summary = data.get('professional_summary','')
-        # Respect max length
-        max_length = config.get('max_length', 250)
-        if len(summary) > max_length:
-            summary = summary[:max_length-3] + "..."
-        story.append(Paragraph(summary, self.styles['Body']))
-        story.append(Spacer(1, 10))
-
-    def _render_skills(self, story, config, data):
-        header_text = config['formatting']['header_text']
-        story.append(Paragraph(header_text, self.styles['SectionHeader']))
-        skills_data = data.get('skills', {})
-        categories = config.get('categories', ['Technical'])
-        if isinstance(skills_data, list):
-            # Simple list fallback
-            skills_text = ", ".join(skills_data[:20])
-            story.append(Paragraph(f"<b>Technical:</b> {skills_text}", self.styles['Body']))
-        elif isinstance(skills_data, dict):
-            for category in categories:
-                category_key = category.lower().replace(' ', '_')
-                if skills_data.get(category_key):
-                    max_skills = config['formatting'].get('max_skills_per_category', 8)
-                    skills_list = skills_data[category_key][:max_skills]
-                    skills_text = config['formatting']['skill_separator'].join(skills_list)
-                    story.append(Paragraph(f"<b>{category}:</b> {skills_text}", self.styles['Body']))
-        story.append(Spacer(1, 10))
-
-    def _render_experience(self, story, config, data):
-        header_text = config['formatting']['header_text']
-        story.append(Paragraph(header_text, self.styles['SectionHeader']))
-        experiences = data.get('experience', [])
-        max_positions = config.get('max_positions', 5)
-        for exp in experiences[:max_positions]:
-            title = exp.get('title', '')
-            company = exp.get('company', '')
-            duration = exp.get('duration', '')
-            job_line = f"<b>{title}</b>{config['formatting']['company_separator']}{company}"
-            if duration:
-                job_line += f"{config['formatting']['company_separator']}{duration}"
-            story.append(Paragraph(job_line, self.styles['JobHeader']))
-            # Responsibilities
-            responsibilities = exp.get('responsibilities', [])
-            max_bullets = config['formatting'].get('max_bullets', 6)
-            bullet = config['formatting']['bullet_style']
-            for resp in responsibilities[:max_bullets]:
-                story.append(Paragraph(f"{bullet} {resp}", self.styles['Body']))
-            story.append(Spacer(1, 8))
-        story.append(Spacer(1, 5))
-
-    def _render_education(self, story, config, data):
-        header_text = config['formatting']['header_text']
-        story.append(Paragraph(header_text, self.styles['SectionHeader']))
+    def _render_education(self, story, data):
+        """Render education section"""
         education = data.get('education', [])
-        separator = config['formatting']['institution_separator']
+        if not education:
+            return
+        
+        story.append(Paragraph("<b>Education</b>", self.styles['SectionHeader']))
+        
         for edu in education:
+            institution = edu.get('institution', '')
+            location = edu.get('location', '')
             degree = edu.get('degree', '')
             field = edu.get('field', '')
-            institution = edu.get('institution', '')
-            year = edu.get('year', '')
-            edu_line = f"<b>{degree}"
+            cgpa = edu.get('cgpa', '')
+            duration = edu.get('duration', '')
+            percentage = edu.get('percentage', '')
+            
+            # Institution and location
+            inst_line = f"<b>{institution}</b>"
+            if location:
+                inst_line += f" {location}"
+            story.append(Paragraph(f"• {inst_line}", self.styles['Body']))
+            
+            # Degree details
+            degree_line = degree
             if field:
-                edu_line += f" in {field}"
-            edu_line += "</b>"
-            if institution: edu_line += f"{separator}{institution}"
-            if year: edu_line += f"{separator}{year}"
-            story.append(Paragraph(edu_line, self.styles['Body']))
-        story.append(Spacer(1, 10))
+                degree_line += f" in {field}"
+            if cgpa:
+                degree_line += f", CGPA: {cgpa}"
+            elif percentage:
+                degree_line += f", {percentage}"
+            if duration:
+                degree_line += f" {duration}"
+            
+            story.append(Paragraph(degree_line, self.styles['Body']))
+        
+        story.append(Spacer(1, 6))
 
-    def _render_projects(self, story, config, data):
-        header_text = config['formatting']['header_text']
-        story.append(Paragraph(header_text, self.styles['SectionHeader']))
+    def _render_projects(self, story, data):
+        """Render projects section"""
         projects = data.get('projects', [])
-        max_projects = config.get('max_projects', 4)
-        for project in projects[:max_projects]:
-            project_name = project.get('name', '')
-            description = project.get('description', '')
-            technologies = project.get('technologies', [])
-            # Title
-            story.append(Paragraph(f"<b>{project_name}</b>", self.styles['Body']))
-            # Description
-            max_desc_length = config['formatting'].get('description_max_length', 150)
-            if len(description) > max_desc_length:
-                description = description[:max_desc_length-3] + "..."
-            story.append(Paragraph(description, self.styles['Body']))
-            # Technologies
-            if technologies:
-                tech_line = f"{config['formatting']['tech_label']}{', '.join(technologies)}"
-                story.append(Paragraph(tech_line, self.styles['Body']))
-            story.append(Spacer(1, 6))
-        story.append(Spacer(1, 5))
+        if not projects:
+            return
+        
+        story.append(Paragraph("<b>Projects</b>", self.styles['SectionHeader']))
+        
+        for project in projects:
+            title = project.get('name', '')
+            tech_stack = project.get('technologies', '')
+            description = project.get('description', [])
+            
+            # Project title with tech stack
+            if isinstance(tech_stack, list):
+                tech_stack = ', '.join(tech_stack)
+            
+            project_header = f"<b>{title}</b>"
+            if tech_stack:
+                project_header += f" | {tech_stack}"
+            
+            story.append(Paragraph(f"• {project_header}:", self.styles['Body']))
+            
+            # Project details as sub-bullets
+            if isinstance(description, str):
+                description = [description]
+            
+            for detail in description:
+                story.append(Paragraph(f"◦ {detail}", self.styles['SubBullet']))
+        
+        story.append(Spacer(1, 6))
 
-    def _render_certifications(self, story, config, data):
-        header_text = config['formatting']['header_text']
-        story.append(Paragraph(header_text, self.styles['SectionHeader']))
+    def _render_research(self, story, data):
+        """Render research section"""
+        research = data.get('research', [])
+        if not research:
+            return
+        
+        story.append(Paragraph("<b>Research</b>", self.styles['SectionHeader']))
+        
+        for item in research:
+            title = item.get('title', '')
+            location = item.get('location', '')
+            role = item.get('role', '')
+            date = item.get('date', '')
+            details = item.get('details', [])
+            
+            # Research header
+            header = f"<b>{title}</b>"
+            if location:
+                header += f" {location}"
+            story.append(Paragraph(f"• {header}", self.styles['Body']))
+            
+            # Role and date
+            if role:
+                role_line = role
+                if date:
+                    role_line += f" {date}"
+                story.append(Paragraph(role_line, self.styles['Body']))
+            
+            # Details
+            if isinstance(details, str):
+                details = [details]
+            
+            for detail in details:
+                story.append(Paragraph(f"◦ {detail}", self.styles['SubBullet']))
+        
+        story.append(Spacer(1, 6))
+
+    def _render_technical_skills(self, story, data):
+        """Render technical skills section"""
+        skills = data.get('skills', {})
+        if not skills:
+            return
+        
+        story.append(Paragraph("<b>Technical Skills</b>", self.styles['SectionHeader']))
+        
+        # Handle both dict and list formats
+        if isinstance(skills, list):
+            skills_text = ", ".join(skills)
+            story.append(Paragraph(f"• <b>Technical:</b> {skills_text}", self.styles['Body']))
+        elif isinstance(skills, dict):
+            # Predefined category order
+            categories = [
+                ('programming', 'Programming & Languages'),
+                ('ml_ds', 'Machine Learning & Data Science'),
+                ('libraries', 'Libraries & Frameworks'),
+                ('databases', 'Databases & Tools'),
+                ('platforms', 'Platforms & Operating Systems')
+            ]
+            
+            for key, label in categories:
+                if key in skills and skills[key]:
+                    if isinstance(skills[key], list):
+                        skills_text = ", ".join(skills[key])
+                    else:
+                        skills_text = skills[key]
+                    story.append(Paragraph(f"• <b>{label}:</b> {skills_text}", self.styles['Body']))
+        
+        story.append(Spacer(1, 6))
+
+    def _render_certifications(self, story, data):
+        """Render certifications section"""
         certifications = data.get('certifications', [])
-        separator = config['formatting']['separator']
+        if not certifications:
+            return
+        
+        story.append(Paragraph("<b>Certifications</b>", self.styles['SectionHeader']))
+        
         for cert in certifications:
-            cert_name = cert.get('name', '')
-            issuer = cert.get('issuer', '')
-            year = cert.get('year', '')
-            cert_line = cert_name
-            if issuer:
-                cert_line += f"{separator}{issuer}"
-            if year:
-                cert_line += f"{separator}{year}"
-            story.append(Paragraph(cert_line, self.styles['Body']))
-        story.append(Spacer(1, 10))
+            if isinstance(cert, str):
+                story.append(Paragraph(f"• {cert}", self.styles['Body']))
+            else:
+                name = cert.get('name', '')
+                issuer = cert.get('issuer', '')
+                year = cert.get('year', '')
+                description = cert.get('description', '')
+                
+                cert_line = f"<b>{name}</b>"
+                if year:
+                    cert_line += f" ({year})"
+                cert_line += ": "
+                if description:
+                    cert_line += description
+                elif issuer:
+                    cert_line += issuer
+                
+                story.append(Paragraph(f"• {cert_line}", self.styles['Body']))
+        
+        story.append(Spacer(1, 6))
+
+    def _render_achievements(self, story, data):
+        """Render achievements and roles section"""
+        achievements = data.get('achievements', [])
+        if not achievements:
+            return
+        
+        story.append(Paragraph("<b>Achievements and Roles</b>", self.styles['SectionHeader']))
+        
+        for achievement in achievements:
+            if isinstance(achievement, str):
+                story.append(Paragraph(f"• {achievement}", self.styles['Body']))
+            else:
+                title = achievement.get('title', '')
+                description = achievement.get('description', '')
+                text = title if title else description
+                story.append(Paragraph(f"• {text}", self.styles['Body']))
+        
+        story.append(Spacer(1, 6))
+
+    def _render_experience(self, story, data):
+        """Render work experience section"""
+        experience = data.get('experience', [])
+        if not experience:
+            return
+        
+        story.append(Paragraph("<b>Work Experience</b>", self.styles['SectionHeader']))
+        
+        for exp in experience:
+            company = exp.get('company', '')
+            location = exp.get('location', '')
+            title = exp.get('title', '')
+            duration = exp.get('duration', '')
+            responsibilities = exp.get('responsibilities', [])
+            
+            # Company header
+            company_line = f"<b>{company}</b>"
+            if location:
+                company_line += f" {location}"
+            story.append(Paragraph(f"• {company_line}", self.styles['Body']))
+            
+            # Title and duration
+            title_line = title
+            if duration:
+                title_line += f" {duration}"
+            story.append(Paragraph(title_line, self.styles['Body']))
+            
+            # Responsibilities
+            if isinstance(responsibilities, str):
+                responsibilities = [responsibilities]
+            
+            for resp in responsibilities:
+                story.append(Paragraph(f"◦ {resp}", self.styles['SubBullet']))
+        
+        story.append(Spacer(1, 6))
+
 
 # Usage example:
-# renderer = FixedTemplateRenderer()
-# pdf_path = renderer.render_resume(resume_data)
+if __name__ == "__main__":
+    # Sample data matching Chetana's format
+    sample_data = {
+        "personal_info": {
+            "name": "John Doe",
+            "phone": "+91-1234567890",
+            "email": "john.doe@example.com",
+            "location": "Mumbai, India",
+            "linkedin": "linkedin.com/in/johndoe",
+            "github": "github.com/johndoe"
+        },
+        "education": [
+            {
+                "institution": "ABC University",
+                "location": "Mumbai, India",
+                "degree": "Master of Science (M.Sc.) in Data Science",
+                "cgpa": "9.5",
+                "duration": "Jul 2023 – Jun 2025"
+            }
+        ],
+        "projects": [
+            {
+                "name": "AI Chatbot",
+                "technologies": "Python, NLP, Flask",
+                "description": [
+                    "Built an intelligent chatbot using natural language processing.",
+                    "Deployed as a web application with 90% accuracy."
+                ]
+            }
+        ],
+        "skills": {
+            "programming": "Python, SQL, Java",
+            "ml_ds": "Machine Learning, Deep Learning, NLP",
+            "libraries": "TensorFlow, Pandas, NumPy",
+            "databases": "MySQL, MongoDB",
+            "platforms": "Windows, Linux"
+        },
+        "certifications": [
+            "Machine Learning: Stanford University (2024): Neural Networks, AI",
+            "Data Analytics: Google (2023): Statistical Analysis, Visualization"
+        ],
+        "achievements": [
+            "Secured First Place in National Hackathon 2024",
+            "Published research paper in IEEE Conference"
+        ]
+    }
+    
+    renderer = FixedTemplateRenderer()
+    pdf_path = renderer.render_resume(sample_data)
+    print(f"Resume generated: {pdf_path}")

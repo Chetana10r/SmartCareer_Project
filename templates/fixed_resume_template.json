@@ -1,18 +1,18 @@
 {
-  "template_name": "Fixed Professional Format",
-  "version": "1.0",
-  "description": "Standardized resume format with consistent structure",
+  "template_name": "Professional Clean Format",
+  "version": "2.0",
+  "description": "Clean, ATS-friendly resume format based on Chetana's layout",
 
   "layout_settings": {
     "page_size": "A4",
     "margins": {
-      "top": 0.75,
-      "bottom": 0.75,
+      "top": 0.6,
+      "bottom": 0.6,
       "left": 0.75,
       "right": 0.75
     },
-    "line_spacing": 1.2,
-    "section_spacing": 0.3
+    "line_spacing": 1.15,
+    "section_spacing": 0.15
   },
 
   "typography": {
@@ -24,18 +24,17 @@
       "emphasis": "Helvetica-Bold"
     },
     "sizes": {
-      "name": 24,
-      "heading": 16,
-      "subheading": 14,
-      "body": 11,
-      "contact": 10
+      "name": 16,
+      "contact": 10,
+      "section_header": 12,
+      "subheading": 11,
+      "body": 10,
+      "small": 9
     }
   },
 
   "colors": {
-    "primary": "#2C3E50",
-    "secondary": "#34495E",
-    "accent": "#3498DB",
+    "primary": "#000000",
     "text": "#000000",
     "background": "#FFFFFF"
   },
@@ -45,120 +44,122 @@
       "name": "header",
       "order": 1,
       "required": true,
-      "style": "centered",
-      "components": ["full_name", "contact_info", "professional_links"],
+      "style": "left_aligned",
       "formatting": {
-        "name_size": 24,
-        "contact_separator": " | ",
-        "alignment": "center"
-      }
-    },
-    {
-      "name": "professional_summary",
-      "order": 2,
-      "required": true,
-      "style": "paragraph",
-      "max_length": 250,
-      "formatting": {
-        "header_text": "PROFESSIONAL SUMMARY",
-        "header_style": "underlined"
-      }
-    },
-    {
-      "name": "technical_skills",
-      "order": 3,
-      "required": true,
-      "style": "categorized",
-      "categories": ["Programming Languages", "Frameworks", "Databases", "Tools & Platforms"],
-      "formatting": {
-        "header_text": "TECHNICAL SKILLS",
-        "category_separator": ": ",
-        "skill_separator": ", ",
-        "max_skills_per_category": 8
-      }
-    },
-    {
-      "name": "professional_experience",
-      "order": 4,
-      "required": true,
-      "style": "chronological_reverse",
-      "max_positions": 5,
-      "formatting": {
-        "header_text": "PROFESSIONAL EXPERIENCE",
-        "job_title_style": "bold",
-        "company_separator": " | ",
-        "date_format": "MMM YYYY",
-        "bullet_style": "•",
-        "max_bullets": 6,
-        "bullet_indent": 0.25
+        "name_bold": true,
+        "contact_inline": true,
+        "contact_separator": "  ",
+        "show_email_label": true,
+        "show_location_label": true
       }
     },
     {
       "name": "education",
-      "order": 5,
+      "order": 2,
       "required": true,
-      "style": "standard",
+      "style": "bullet_list",
       "formatting": {
-        "header_text": "EDUCATION",
-        "degree_style": "bold",
-        "institution_separator": " | ",
-        "show_gpa": false
+        "header_text": "Education",
+        "show_institution_first": true,
+        "show_location": true,
+        "show_cgpa": true,
+        "date_format": "MMM YYYY",
+        "bullet_style": "•",
+        "sub_bullet_style": "◦"
       }
     },
     {
-      "name": "key_projects",
-      "order": 6,
-      "required": false,
-      "style": "project_list",
-      "max_projects": 4,
+      "name": "projects",
+      "order": 3,
+      "required": true,
+      "style": "bullet_list_detailed",
+      "max_projects": 10,
       "formatting": {
-        "header_text": "KEY PROJECTS",
-        "project_title_style": "bold",
-        "tech_label": "Technologies: ",
-        "description_max_length": 150
+        "header_text": "Projects",
+        "show_tech_stack_inline": true,
+        "bullet_style": "•",
+        "sub_bullet_style": "◦",
+        "max_bullets": 6
+      }
+    },
+    {
+      "name": "research",
+      "order": 4,
+      "required": false,
+      "style": "bullet_list_detailed",
+      "formatting": {
+        "header_text": "Research",
+        "bullet_style": "•",
+        "sub_bullet_style": "◦"
+      }
+    },
+    {
+      "name": "technical_skills",
+      "order": 5,
+      "required": true,
+      "style": "categorized_bullets",
+      "formatting": {
+        "header_text": "Technical Skills",
+        "bullet_style": "•",
+        "category_separator": ": ",
+        "skill_separator": ", "
       }
     },
     {
       "name": "certifications",
+      "order": 6,
+      "required": false,
+      "style": "bullet_list",
+      "formatting": {
+        "header_text": "Certifications",
+        "bullet_style": "•",
+        "show_year": true,
+        "separator": ": "
+      }
+    },
+    {
+      "name": "achievements",
       "order": 7,
       "required": false,
-      "style": "simple_list",
+      "style": "bullet_list",
       "formatting": {
-        "header_text": "CERTIFICATIONS",
-        "date_format": "YYYY",
-        "separator": " - "
+        "header_text": "Achievements and Roles",
+        "bullet_style": "•"
+      }
+    },
+    {
+      "name": "experience",
+      "order": 8,
+      "required": false,
+      "style": "bullet_list_detailed",
+      "formatting": {
+        "header_text": "Work Experience",
+        "bullet_style": "•",
+        "sub_bullet_style": "◦",
+        "show_company_location": true
       }
     }
   ],
 
   "formatting_rules": {
     "section_headers": {
-      "style": "uppercase",
-      "decoration": "underline",
-      "color": "primary",
-      "spacing_after": 0.2
+      "style": "bold",
+      "decoration": "none",
+      "spacing_before": 0.15,
+      "spacing_after": 0.1
     },
     "bullet_points": {
-      "symbol": "•",
-      "indent": 0.25,
-      "spacing": 0.1
-    },
-    "dates": {
-      "format": "MMM YYYY",
-      "alignment": "right",
-      "style": "normal"
+      "primary_symbol": "•",
+      "secondary_symbol": "◦",
+      "indent_primary": 0.2,
+      "indent_secondary": 0.4,
+      "spacing": 0.08
     },
     "contact_info": {
-      "email_style": "normal",
-      "phone_format": "(XXX) XXX-XXXX",
-      "link_style": "underline"
+      "phone_format": "+XX-XXXXXXXXXX",
+      "email_prefix": "Email: ",
+      "location_prefix": "Location: ",
+      "link_style": "plain"
     }
-  },
-
-  "content_optimization": {
-    "summary_keywords": ["experienced", "skilled", "proven track record", "expertise"],
-    "action_verbs": ["developed", "implemented", "designed", "managed", "led", "created", "optimized"],
-    "skill_prioritization": "match_job_requirements",
-    "experience_focus": "relevant_achievements"
   }
 }
