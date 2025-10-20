@@ -1,6 +1,6 @@
 import json
 from reportlab.lib.pagesizes import A4
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.units import inch
 from reportlab.lib import colors
@@ -48,79 +48,67 @@ class FixedTemplateRenderer:
     def _create_custom_styles(self):
         styles = {}
         
-        # Name style (Bold, larger)
+        # Get sizes safely with fallbacks
+        typography = self.template.get('typography', {})
+        fonts = typography.get('fonts', {})
+        sizes = typography.get('sizes', {})
+        
+        # Name style (Bold, larger) - on same line as phone
         styles['Name'] = ParagraphStyle(
             'Name',
-            fontName='Helvetica-Bold',
-            fontSize=self.template['typography']['sizes']['name'],
+            fontName=fonts.get('name', 'Helvetica-Bold'),
+            fontSize=sizes.get('name', 16),
             alignment=TA_LEFT,
-            spaceAfter=2,
-            leading=16
+            spaceAfter=3,
+            leading=18
         )
 
         # Contact info style
         styles['Contact'] = ParagraphStyle(
             'Contact',
-            fontName='Helvetica',
-            fontSize=self.template['typography']['sizes']['contact'],
+            fontName=fonts.get('body', 'Helvetica'),
+            fontSize=sizes.get('contact', 10),
             alignment=TA_LEFT,
-            spaceAfter=1,
+            spaceAfter=2,
             leading=12
         )
 
         # Section header style (Bold)
+        section_header_size = sizes.get('section_header', sizes.get('heading', 12))
         styles['SectionHeader'] = ParagraphStyle(
             'SectionHeader',
-            fontName='Helvetica-Bold',
-            fontSize=self.template['typography']['sizes']['section_header'],
+            fontName=fonts.get('heading', 'Helvetica-Bold'),
+            fontSize=section_header_size,
             alignment=TA_LEFT,
-            spaceBefore=12,
-            spaceAfter=6,
+            spaceBefore=10,
+            spaceAfter=4,
             leading=14
         )
 
-        # Body text style
+        # Body text style (for bullet points)
         styles['Body'] = ParagraphStyle(
             'Body',
-            fontName='Helvetica',
-            fontSize=self.template['typography']['sizes']['body'],
+            fontName=fonts.get('body', 'Helvetica'),
+            fontSize=sizes.get('body', 10),
             alignment=TA_LEFT,
-            leftIndent=15,
-            spaceAfter=4,
-            leading=12
+            leftIndent=0,
+            firstLineIndent=-15,
+            spaceAfter=3,
+            leading=12,
+            bulletIndent=0
         )
 
-        # Sub-bullet style (deeper indent)
+        # Sub-bullet style (deeper indent with circle bullets)
         styles['SubBullet'] = ParagraphStyle(
             'SubBullet',
-            fontName='Helvetica',
-            fontSize=self.template['typography']['sizes']['body'],
-            alignment=TA_LEFT,
-            leftIndent=30,
-            spaceAfter=4,
-            leading=12
-        )
-
-        # Institution/Company header
-        styles['InstitutionHeader'] = ParagraphStyle(
-            'InstitutionHeader',
-            fontName='Helvetica-Bold',
-            fontSize=self.template['typography']['sizes']['body'],
+            fontName=fonts.get('body', 'Helvetica'),
+            fontSize=sizes.get('body', 10),
             alignment=TA_LEFT,
             leftIndent=15,
-            spaceAfter=2,
-            leading=12
-        )
-
-        # Project/Position title
-        styles['ProjectTitle'] = ParagraphStyle(
-            'ProjectTitle',
-            fontName='Helvetica-Bold',
-            fontSize=self.template['typography']['sizes']['body'],
-            alignment=TA_LEFT,
-            leftIndent=15,
-            spaceAfter=2,
-            leading=12
+            firstLineIndent=-15,
+            spaceAfter=3,
+            leading=12,
+            bulletIndent=15
         )
 
         return styles
@@ -158,15 +146,32 @@ class FixedTemplateRenderer:
         return output_path
 
     def _render_header(self, story, data):
-        """Render name and contact info"""
+        """Render name and contact info - Name and Phone on same line"""
         personal_info = data.get('personal_info', {})
         
-        # Name
+        # Name and Phone on same line
         name = personal_info.get('name', 'Full Name')
         phone = personal_info.get('phone', '+91-XXXXXXXXXX')
-        story.append(Paragraph(f"<b>{name}</b> {phone}", self.styles['Name']))
         
-        # Email line
+        # Use table for name and phone alignment
+        name_phone_data = [[
+            Paragraph(f"<b>{name}</b>", self.styles['Name']),
+            Paragraph(f"{phone}", self.styles['Name'])
+        ]]
+        
+        name_phone_table = Table(name_phone_data, colWidths=[4.5*inch, 2*inch])
+        name_phone_table.setStyle(TableStyle([
+            ('ALIGN', (0, 0), (0, 0), 'LEFT'),
+            ('ALIGN', (1, 0), (1, 0), 'RIGHT'),
+            ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+            ('LEFTPADDING', (0, 0), (-1, -1), 0),
+            ('RIGHTPADDING', (0, 0), (-1, -1), 0),
+            ('TOPPADDING', (0, 0), (-1, -1), 0),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 0),
+        ]))
+        story.append(name_phone_table)
+        
+        # Email and Location line
         email = personal_info.get('email', 'email@example.com')
         location = personal_info.get('location', 'City, Country')
         story.append(Paragraph(f"Email: {email}  Location: {location}", self.styles['Contact']))
@@ -183,7 +188,7 @@ class FixedTemplateRenderer:
         if links:
             story.append(Paragraph("  ".join(links), self.styles['Contact']))
         
-        story.append(Spacer(1, 8))
+        story.append(Spacer(1, 6))
 
     def _render_education(self, story, data):
         """Render education section"""
@@ -202,13 +207,29 @@ class FixedTemplateRenderer:
             duration = edu.get('duration', '')
             percentage = edu.get('percentage', '')
             
-            # Institution and location
-            inst_line = f"<b>{institution}</b>"
+            # Create table for institution and duration alignment
+            inst_text = f"<b>{institution}</b>"
             if location:
-                inst_line += f" {location}"
-            story.append(Paragraph(f"• {inst_line}", self.styles['Body']))
+                inst_text += f" {location}"
             
-            # Degree details
+            edu_data = [[
+                Paragraph(f"• {inst_text}", self.styles['Body']),
+                Paragraph(duration if duration else "", self.styles['Body'])
+            ]]
+            
+            edu_table = Table(edu_data, colWidths=[5*inch, 1.5*inch])
+            edu_table.setStyle(TableStyle([
+                ('ALIGN', (0, 0), (0, 0), 'LEFT'),
+                ('ALIGN', (1, 0), (1, 0), 'RIGHT'),
+                ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+                ('LEFTPADDING', (0, 0), (-1, -1), 15),
+                ('RIGHTPADDING', (0, 0), (-1, -1), 0),
+                ('TOPPADDING', (0, 0), (-1, -1), 0),
+                ('BOTTOMPADDING', (0, 0), (-1, -1), 3),
+            ]))
+            story.append(edu_table)
+            
+            # Degree details on next line
             degree_line = degree
             if field:
                 degree_line += f" in {field}"
@@ -216,12 +237,11 @@ class FixedTemplateRenderer:
                 degree_line += f", CGPA: {cgpa}"
             elif percentage:
                 degree_line += f", {percentage}"
-            if duration:
-                degree_line += f" {duration}"
             
-            story.append(Paragraph(degree_line, self.styles['Body']))
+            # Indent the degree line
+            story.append(Paragraph(f"&nbsp;&nbsp;&nbsp;&nbsp;{degree_line}", self.styles['Contact']))
         
-        story.append(Spacer(1, 6))
+        story.append(Spacer(1, 4))
 
     def _render_projects(self, story, data):
         """Render projects section"""
@@ -253,7 +273,7 @@ class FixedTemplateRenderer:
             for detail in description:
                 story.append(Paragraph(f"◦ {detail}", self.styles['SubBullet']))
         
-        story.append(Spacer(1, 6))
+        story.append(Spacer(1, 4))
 
     def _render_research(self, story, data):
         """Render research section"""
@@ -270,18 +290,31 @@ class FixedTemplateRenderer:
             date = item.get('date', '')
             details = item.get('details', [])
             
-            # Research header
-            header = f"<b>{title}</b>"
+            # Research header with date
+            header_text = f"<b>{title}</b>"
             if location:
-                header += f" {location}"
-            story.append(Paragraph(f"• {header}", self.styles['Body']))
+                header_text += f" {location}"
             
-            # Role and date
+            res_data = [[
+                Paragraph(f"• {header_text}", self.styles['Body']),
+                Paragraph(date if date else "", self.styles['Body'])
+            ]]
+            
+            res_table = Table(res_data, colWidths=[5*inch, 1.5*inch])
+            res_table.setStyle(TableStyle([
+                ('ALIGN', (0, 0), (0, 0), 'LEFT'),
+                ('ALIGN', (1, 0), (1, 0), 'RIGHT'),
+                ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+                ('LEFTPADDING', (0, 0), (-1, -1), 15),
+                ('RIGHTPADDING', (0, 0), (-1, -1), 0),
+                ('TOPPADDING', (0, 0), (-1, -1), 0),
+                ('BOTTOMPADDING', (0, 0), (-1, -1), 3),
+            ]))
+            story.append(res_table)
+            
+            # Role
             if role:
-                role_line = role
-                if date:
-                    role_line += f" {date}"
-                story.append(Paragraph(role_line, self.styles['Body']))
+                story.append(Paragraph(f"&nbsp;&nbsp;&nbsp;&nbsp;{role}", self.styles['Contact']))
             
             # Details
             if isinstance(details, str):
@@ -290,7 +323,7 @@ class FixedTemplateRenderer:
             for detail in details:
                 story.append(Paragraph(f"◦ {detail}", self.styles['SubBullet']))
         
-        story.append(Spacer(1, 6))
+        story.append(Spacer(1, 4))
 
     def _render_technical_skills(self, story, data):
         """Render technical skills section"""
@@ -305,7 +338,7 @@ class FixedTemplateRenderer:
             skills_text = ", ".join(skills)
             story.append(Paragraph(f"• <b>Technical:</b> {skills_text}", self.styles['Body']))
         elif isinstance(skills, dict):
-            # Predefined category order
+            # Predefined category order and labels
             categories = [
                 ('programming', 'Programming & Languages'),
                 ('ml_ds', 'Machine Learning & Data Science'),
@@ -316,13 +349,16 @@ class FixedTemplateRenderer:
             
             for key, label in categories:
                 if key in skills and skills[key]:
-                    if isinstance(skills[key], list):
-                        skills_text = ", ".join(skills[key])
+                    skill_list = skills[key]
+                    if isinstance(skill_list, list):
+                        skills_text = ", ".join(skill_list)
                     else:
-                        skills_text = skills[key]
-                    story.append(Paragraph(f"• <b>{label}:</b> {skills_text}", self.styles['Body']))
+                        skills_text = skill_list
+                    
+                    if skills_text.strip():  # Only add if not empty
+                        story.append(Paragraph(f"• <b>{label}:</b> {skills_text}", self.styles['Body']))
         
-        story.append(Spacer(1, 6))
+        story.append(Spacer(1, 4))
 
     def _render_certifications(self, story, data):
         """Render certifications section"""
@@ -334,7 +370,8 @@ class FixedTemplateRenderer:
         
         for cert in certifications:
             if isinstance(cert, str):
-                story.append(Paragraph(f"• {cert}", self.styles['Body']))
+                if cert.strip():  # Only add non-empty strings
+                    story.append(Paragraph(f"• {cert}", self.styles['Body']))
             else:
                 name = cert.get('name', '')
                 issuer = cert.get('issuer', '')
@@ -352,7 +389,7 @@ class FixedTemplateRenderer:
                 
                 story.append(Paragraph(f"• {cert_line}", self.styles['Body']))
         
-        story.append(Spacer(1, 6))
+        story.append(Spacer(1, 4))
 
     def _render_achievements(self, story, data):
         """Render achievements and roles section"""
@@ -364,14 +401,16 @@ class FixedTemplateRenderer:
         
         for achievement in achievements:
             if isinstance(achievement, str):
-                story.append(Paragraph(f"• {achievement}", self.styles['Body']))
+                if achievement.strip():  # Only add non-empty strings
+                    story.append(Paragraph(f"• {achievement}", self.styles['Body']))
             else:
                 title = achievement.get('title', '')
                 description = achievement.get('description', '')
                 text = title if title else description
-                story.append(Paragraph(f"• {text}", self.styles['Body']))
+                if text.strip():
+                    story.append(Paragraph(f"• {text}", self.styles['Body']))
         
-        story.append(Spacer(1, 6))
+        story.append(Spacer(1, 4))
 
     def _render_experience(self, story, data):
         """Render work experience section"""
@@ -388,26 +427,41 @@ class FixedTemplateRenderer:
             duration = exp.get('duration', '')
             responsibilities = exp.get('responsibilities', [])
             
-            # Company header
-            company_line = f"<b>{company}</b>"
+            # Company header with duration
+            company_text = f"<b>{company}</b>"
             if location:
-                company_line += f" {location}"
-            story.append(Paragraph(f"• {company_line}", self.styles['Body']))
+                company_text += f" {location}"
             
-            # Title and duration
-            title_line = title
-            if duration:
-                title_line += f" {duration}"
-            story.append(Paragraph(title_line, self.styles['Body']))
+            exp_data = [[
+                Paragraph(f"• {company_text}", self.styles['Body']),
+                Paragraph(duration if duration else "", self.styles['Body'])
+            ]]
+            
+            exp_table = Table(exp_data, colWidths=[5*inch, 1.5*inch])
+            exp_table.setStyle(TableStyle([
+                ('ALIGN', (0, 0), (0, 0), 'LEFT'),
+                ('ALIGN', (1, 0), (1, 0), 'RIGHT'),
+                ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+                ('LEFTPADDING', (0, 0), (-1, -1), 15),
+                ('RIGHTPADDING', (0, 0), (-1, -1), 0),
+                ('TOPPADDING', (0, 0), (-1, -1), 0),
+                ('BOTTOMPADDING', (0, 0), (-1, -1), 3),
+            ]))
+            story.append(exp_table)
+            
+            # Title
+            if title:
+                story.append(Paragraph(f"&nbsp;&nbsp;&nbsp;&nbsp;{title}", self.styles['Contact']))
             
             # Responsibilities
             if isinstance(responsibilities, str):
                 responsibilities = [responsibilities]
             
             for resp in responsibilities:
-                story.append(Paragraph(f"◦ {resp}", self.styles['SubBullet']))
+                if resp.strip():
+                    story.append(Paragraph(f"◦ {resp}", self.styles['SubBullet']))
         
-        story.append(Spacer(1, 6))
+        story.append(Spacer(1, 4))
 
 
 # Usage example:
@@ -415,46 +469,44 @@ if __name__ == "__main__":
     # Sample data matching Chetana's format
     sample_data = {
         "personal_info": {
-            "name": "John Doe",
-            "phone": "+91-1234567890",
-            "email": "john.doe@example.com",
-            "location": "Mumbai, India",
-            "linkedin": "linkedin.com/in/johndoe",
-            "github": "github.com/johndoe"
+            "name": "Chetana Rane",
+            "phone": "+91-8799861261",
+            "email": "chetanarane10@gmail.com",
+            "location": "Pune, India",
+            "linkedin": "linkedin.com/in/chetana-rane-bb6ba3271",
+            "github": "github.com/Chetana10r"
         },
         "education": [
             {
-                "institution": "ABC University",
-                "location": "Mumbai, India",
+                "institution": "Fergusson College",
+                "location": "Pune, India",
                 "degree": "Master of Science (M.Sc.) in Data Science",
-                "cgpa": "9.5",
-                "duration": "Jul 2023 – Jun 2025"
+                "cgpa": "9.63",
+                "duration": "Jul 2024 – Jun 2026"
             }
         ],
         "projects": [
             {
-                "name": "AI Chatbot",
-                "technologies": "Python, NLP, Flask",
+                "name": "Fake News Detection System",
+                "technologies": "Multimodal Machine Learning",
                 "description": [
-                    "Built an intelligent chatbot using natural language processing.",
-                    "Deployed as a web application with 90% accuracy."
+                    "Developed a multimodal fake news detection system with text, image (OCR), audio (Whisper), and video inputs.",
+                    "Utilized SentenceTransformer embeddings with a Random Forest classifier, achieving 95% accuracy."
                 ]
             }
         ],
         "skills": {
-            "programming": "Python, SQL, Java",
-            "ml_ds": "Machine Learning, Deep Learning, NLP",
-            "libraries": "TensorFlow, Pandas, NumPy",
-            "databases": "MySQL, MongoDB",
-            "platforms": "Windows, Linux"
+            "programming": "Python, SQL, C (Basic)",
+            "ml_ds": "Supervised Learning, Unsupervised Learning, Classification, Regression, NLP",
+            "libraries": "Pandas, NumPy, scikit-learn, Matplotlib, Seaborn, TensorFlow, Flask",
+            "databases": "MySQL, PostgreSQL, Git, Power BI, Tableau, VS Code",
+            "platforms": "Windows, Linux, Raspberry Pi"
         },
         "certifications": [
-            "Machine Learning: Stanford University (2024): Neural Networks, AI",
-            "Data Analytics: Google (2023): Statistical Analysis, Visualization"
+            "AI GATI Hackathon: Top 12 Finalist (2024): AI-based challenge participation, Machine Learning."
         ],
         "achievements": [
-            "Secured First Place in National Hackathon 2024",
-            "Published research paper in IEEE Conference"
+            "Secured First Place in Avishkar (Engineering & Technology) and qualified for the State-level competition."
         ]
     }
     

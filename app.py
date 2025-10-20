@@ -12,6 +12,66 @@ import os
 from pdf2image import convert_from_bytes
 from models.fixed_template_renderer import FixedTemplateRenderer
 import logging
+import yake
+from collections import Counter
+
+# -----------------------------
+# Keyword Extraction & Matching
+# -----------------------------
+def extract_keywords_from_text(text, max_keywords=20):
+    """Extract important keywords using YAKE"""
+    try:
+        kw_extractor = yake.KeywordExtractor(
+            lan="en",
+            n=2,  # bigrams
+            dedupLim=0.9,
+            top=max_keywords
+        )
+        keywords = kw_extractor.extract_keywords(text)
+        return [kw[0] for kw in keywords]
+    except:
+        # Fallback: simple word frequency
+        words = re.findall(r'\b[a-z]{3,}\b', text.lower())
+        common_words = Counter(words).most_common(max_keywords)
+        return [word for word, _ in common_words]
+
+def optimize_resume_content(resume_text, job_description):
+    """
+    Optimize resume content based on job description
+    Returns optimized summary and matched skills
+    """
+    # Extract keywords from job description
+    job_keywords = set(extract_keywords_from_text(job_description, 30))
+    
+    # Extract skills from resume
+    resume_words = set(re.findall(r'\b[a-z]{3,}\b', resume_text.lower()))
+    
+    # Find matching skills
+    matched_skills = job_keywords.intersection(resume_words)
+    missing_keywords = job_keywords - resume_words
+    
+    # Generate optimized summary
+    top_skills = list(matched_skills)[:8]
+    
+    if top_skills:
+        summary = (
+            f"Results-driven professional with expertise in {', '.join(top_skills[:5])}. "
+            f"Proven track record in delivering high-impact solutions and driving organizational success. "
+            f"Strong technical and analytical skills combined with excellent problem-solving abilities."
+        )
+    else:
+        summary = (
+            "Accomplished professional with demonstrated expertise in technology and innovation. "
+            "Proven ability to deliver results in fast-paced environments. "
+            "Strong analytical and communication skills with a focus on continuous improvement."
+        )
+    
+    return {
+        'summary': summary,
+        'matched_skills': list(matched_skills)[:15],
+        'missing_keywords': list(missing_keywords)[:10],
+        'match_score': int((len(matched_skills) / len(job_keywords)) * 100) if job_keywords else 0
+    }
 
 # Load environment variables from .env file
 try:
@@ -25,12 +85,6 @@ logging.basicConfig(level=logging.INFO)
 app = Flask(__name__)
 CORS(app)
 
-# Hugging Face API setup - using a more reliable free model
-HF_API_TOKEN = os.getenv("HF_API_TOKEN")
-HF_API_URL = "https://api-inference.huggingface.co/models/facebook/bart-large-cnn"  # Free summarization model
-
-if not HF_API_TOKEN:
-    app.logger.warning("HF_API_TOKEN not set! Set it with: export HF_API_TOKEN=your_token (Linux/Mac) or setx HF_API_TOKEN your_token (Windows)")
 
 # Tesseract OCR path - make sure this is installed
 try:
@@ -148,61 +202,7 @@ def extract_text_from_pdf(file):
 
     return text.strip() if text else "Unable to extract text from PDF"
 
-# -----------------------------
-# Hugging Face Model Caller (Improved)
-# -----------------------------
-def call_hf_model(prompt, max_retries=3):
-    """Call Hugging Face API with retry logic"""
-    if not HF_API_TOKEN:
-        app.logger.error("Missing HF_API_TOKEN")
-        return generate_fallback_response(prompt)
 
-    headers = {"Authorization": f"Bearer {HF_API_TOKEN}"}
-    
-    # List of free models to try in order
-    models = [
-        "facebook/bart-large-cnn",  # Summarization
-        "google/flan-t5-small",     # Text generation
-        "t5-small"                   # Basic T5
-    ]
-    
-    for model in models:
-        url = f"https://api-inference.huggingface.co/models/{model}"
-        
-        for attempt in range(max_retries):
-            try:
-                # Truncate prompt if too long
-                truncated_prompt = prompt[:1000] if len(prompt) > 1000 else prompt
-                
-                response = requests.post(
-                    url,
-                    headers=headers,
-                    json={"inputs": truncated_prompt, "parameters": {"max_length": 150}},
-                    timeout=30
-                )
-                
-                if response.status_code == 200:
-                    app.logger.info(f"Successfully called {model}")
-                    return response.json()
-                elif response.status_code == 503:
-                    app.logger.warning(f"{model} is loading, waiting...")
-                    import time
-                    time.sleep(5)
-                    continue
-                elif response.status_code == 403:
-                    app.logger.warning(f"Access denied for {model}, trying next model...")
-                    break
-                else:
-                    app.logger.warning(f"API returned {response.status_code}: {response.text}")
-                    
-            except requests.exceptions.Timeout:
-                app.logger.warning(f"Timeout on attempt {attempt+1} for {model}")
-            except Exception as e:
-                app.logger.error(f"Error calling {model}: {e}")
-    
-    # If all models fail, use fallback
-    app.logger.warning("All HF models failed, using fallback")
-    return generate_fallback_response(prompt)
 
 def generate_fallback_response(prompt):
     """Generate basic response without API - improved version"""
@@ -379,75 +379,130 @@ def scrape_jobs():
 # -----------------------------
 @app.route('/optimize_resume', methods=['POST'])
 def optimize_resume():
-    """Optimize resume based on job description"""
+    """Optimize resume based on job description with improved matching"""
     if 'resume' not in request.files:
         return jsonify({"error": "No resume uploaded"}), 400
 
     resume_file = request.files['resume']
     job_description = request.form.get('job_description', '')
     
-    try:
-        additional_info = json.loads(request.form.get('additional_info', '{}'))
-    except json.JSONDecodeError:
-        additional_info = {}
-
     # Extract resume text
     resume_text = extract_text_from_pdf(resume_file)
     
     if not resume_text or resume_text == "Unable to extract text from PDF":
         return jsonify({"error": "Could not extract text from resume"}), 400
 
-    # Extract skills from resume
-    cleaned_text = clean_text(resume_text)
-    resume_skills = extract_skills(cleaned_text, IT_SKILL_LIST + NON_IT_SKILL_LIST)
-
-    # Build concise prompt for HF model
-    prompt = f"""Generate a professional summary for this resume:
-Skills: {', '.join(resume_skills[:10])}
-Job: {job_description[:200]}
-Create a 2-3 sentence professional summary."""
-
     try:
-        # Call HF model
-        hf_response = call_hf_model(prompt)
-
-        # Parse response
-        if isinstance(hf_response, list) and len(hf_response) > 0:
-            if "summary_text" in hf_response[0]:
-                summary = hf_response[0]["summary_text"]
-            elif "generated_text" in hf_response[0]:
-                summary = hf_response[0]["generated_text"]
-            else:
-                summary = str(hf_response[0])
+        # Clean and analyze resume
+        cleaned_text = clean_text(resume_text)
+        
+        # Optimize based on job description
+        if job_description:
+            optimization = optimize_resume_content(cleaned_text, job_description)
+            summary = optimization['summary']
+            matched_skills = optimization['matched_skills']
+            match_score = optimization['match_score']
+            
+            app.logger.info(f"Resume optimization - Match score: {match_score}%")
+            app.logger.info(f"Matched skills: {matched_skills}")
         else:
-            summary = "Experienced professional with proven expertise in delivering results."
-
-        # Build optimized resume data matching the template format
+            # No job description, use extracted skills
+            resume_skills = extract_skills(cleaned_text, IT_SKILL_LIST + NON_IT_SKILL_LIST)
+            summary = (
+                "Experienced professional with demonstrated expertise in technology and innovation. "
+                "Proven track record of delivering high-impact solutions. "
+                "Strong analytical and problem-solving abilities."
+            )
+            matched_skills = resume_skills[:15]
+            match_score = 0
+        
+        # Extract personal info from original resume (better extraction)
+        email_match = re.search(r'[\w\.-]+@[\w\.-]+\.\w+', resume_text)
+        phone_match = re.search(r'[\+\d][\d\-\(\)\s]{8,}', resume_text)
+        
+        # Extract name (usually first line or near email)
+        lines = resume_text.split('\n')
+        name = "Your Name"
+        for line in lines[:5]:  # Check first 5 lines
+            if len(line.strip()) > 2 and not '@' in line and not '+' in line:
+                # Likely a name
+                name = line.strip()
+                break
+        
+        # Categorize skills for better formatting
+        skill_categories = {
+            'programming': [],
+            'ml_ds': [],
+            'libraries': [],
+            'databases': [],
+            'platforms': []
+        }
+        
+        # Simple categorization
+        for skill in matched_skills:
+            skill_lower = skill.lower()
+            if any(lang in skill_lower for lang in ['python', 'java', 'javascript', 'c++', 'sql', 'c#']):
+                skill_categories['programming'].append(skill)
+            elif any(ml in skill_lower for ml in ['machine learning', 'deep learning', 'nlp', 'data science', 'ai']):
+                skill_categories['ml_ds'].append(skill)
+            elif any(lib in skill_lower for lib in ['tensorflow', 'pytorch', 'pandas', 'numpy', 'react', 'flask', 'django']):
+                skill_categories['libraries'].append(skill)
+            elif any(db in skill_lower for db in ['mysql', 'mongodb', 'postgresql', 'database', 'sql']):
+                skill_categories['databases'].append(skill)
+            else:
+                skill_categories['platforms'].append(skill)
+        
+        # Build optimized resume data with proper structure
         optimized_resume = {
             "personal_info": {
-                "name": additional_info.get('name', 'Your Name'),
-                "phone": additional_info.get('phone', '+91-XXXXXXXXXX'),
-                "email": additional_info.get('email', 'email@example.com'),
-                "location": additional_info.get('location', 'City, Country'),
-                "linkedin": additional_info.get('linkedin', ''),
-                "github": additional_info.get('github', '')
+                "name": name,
+                "email": email_match.group(0) if email_match else "email@example.com",
+                "phone": phone_match.group(0) if phone_match else "+91-XXXXXXXXXX",
+                "location": "India",  # Default
+                "linkedin": "",
+                "github": ""
             },
             "professional_summary": summary,
-            "skills": resume_skills[:15] if resume_skills else ["Python", "Machine Learning", "Data Analysis"],
-            "education": [],
+            "skills": skill_categories,  # Now it's a dictionary
+            "education": [
+                {
+                    "institution": "Your University",
+                    "degree": "Bachelor of Science",
+                    "field": "Computer Science",
+                    "cgpa": "",
+                    "duration": "2020 - 2024",
+                    "location": "India"
+                }
+            ],
             "experience": [],
-            "projects": [],
-            "certifications": [],
-            "achievements": []
+            "projects": [
+                {
+                    "name": "Sample Project",
+                    "technologies": ", ".join(matched_skills[:5]) if matched_skills else "Python, Machine Learning",
+                    "description": [
+                        "Developed innovative solutions using modern technologies",
+                        "Implemented best practices and optimized performance"
+                    ]
+                }
+            ],
+            "certifications": [
+                "Relevant certifications in " + (matched_skills[0] if matched_skills else "Technology")
+            ],
+            "achievements": [
+                "Demonstrated expertise in key technical areas",
+                "Strong problem-solving and analytical skills"
+            ]
         }
-
+        
         # Ensure static directory exists
         os.makedirs('static', exist_ok=True)
-
+        
         # Render PDF
         renderer = FixedTemplateRenderer()
         pdf_path = renderer.render_resume(optimized_resume)
-
+        
+        app.logger.info(f"Resume generated successfully at {pdf_path}")
+        
         return send_file(pdf_path, as_attachment=True, download_name="optimized_resume.pdf")
 
     except Exception as e:
@@ -456,6 +511,153 @@ Create a 2-3 sentence professional summary."""
         traceback.print_exc()
         return jsonify({"error": f"Failed to optimize resume: {str(e)}"}), 500
 
+
+# -----------------------------
+# ADD these NEW routes:
+# -----------------------------
+
+@app.route('/create_resume', methods=['POST'])
+def create_resume():
+    """Create resume from user-provided data"""
+    try:
+        data = request.get_json()
+        
+        if not data:
+            return jsonify({"error": "No data provided"}), 400
+        
+        # Validate required fields
+        if not data.get('name') or not data.get('email'):
+            return jsonify({"error": "Name and Email are required"}), 400
+        
+        # Get job description for optimization
+        job_description = data.get('job_description', '')
+        
+        # Build resume data structure
+        resume_data = {
+            "personal_info": {
+                "name": data.get('name', 'Your Name'),
+                "phone": data.get('phone', ''),
+                "email": data.get('email', ''),
+                "location": data.get('location', ''),
+                "linkedin": data.get('linkedin', ''),
+                "github": data.get('github', '')
+            },
+            "professional_summary": data.get('summary', ''),
+            "education": data.get('education', []),
+            "experience": data.get('experience', []),
+            "projects": data.get('projects', []),
+            "skills": data.get('skills', {}),
+            "certifications": data.get('certifications', []),
+            "achievements": data.get('achievements', []),
+            "research": data.get('research', [])
+        }
+        
+        # If job description provided, optimize summary
+        if job_description and not resume_data['professional_summary']:
+            skills_text = str(resume_data['skills'])
+            optimization = optimize_resume_content(skills_text, job_description)
+            resume_data['professional_summary'] = optimization['summary']
+        
+        # Default summary if none provided
+        if not resume_data['professional_summary']:
+            resume_data['professional_summary'] = (
+                "Motivated professional with strong analytical and problem-solving skills. "
+                "Committed to delivering high-quality results and continuous learning."
+            )
+        
+        # Ensure static directory exists
+        os.makedirs('static', exist_ok=True)
+        
+        # Render PDF
+        renderer = FixedTemplateRenderer()
+        pdf_path = renderer.render_resume(resume_data)
+        
+        return send_file(pdf_path, as_attachment=True, download_name="generated_resume.pdf")
+    
+    except Exception as e:
+        app.logger.error(f"Error in create_resume: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({"error": f"Failed to create resume: {str(e)}"}), 500
+
+@app.route('/check_ats_score', methods=['POST'])
+def check_ats_score():
+    """Check ATS compatibility score of resume against job description"""
+    if 'resume' not in request.files:
+        return jsonify({"error": "No resume uploaded"}), 400
+    
+    resume_file = request.files['resume']
+    job_description = request.form.get('job_description', '')
+    
+    if not job_description:
+        return jsonify({"error": "Job description is required"}), 400
+    
+    try:
+        # Extract resume text
+        resume_text = extract_text_from_pdf(resume_file)
+        
+        if not resume_text:
+            return jsonify({"error": "Could not extract text from resume"}), 400
+        
+        # Analyze match
+        cleaned_text = clean_text(resume_text)
+        optimization = optimize_resume_content(cleaned_text, job_description)
+        
+        # Calculate additional scores
+        word_count = len(resume_text.split())
+        has_email = bool(re.search(r'[\w\.-]+@[\w\.-]+\.\w+', resume_text))
+        has_phone = bool(re.search(r'[\+\d][\d\-\(\)\s]{8,}', resume_text))
+        
+        # Format score
+        format_score = 100
+        if not has_email: format_score -= 20
+        if not has_phone: format_score -= 20
+        if word_count < 200: format_score -= 30
+        if word_count > 1000: format_score -= 10
+        
+        # Ensure format_score doesn't go below 0
+        format_score = max(0, format_score)
+        
+        # Overall ATS score
+        overall_score = int((optimization['match_score'] * 0.6) + (format_score * 0.4))
+        
+        # Better suggestions
+        suggestions = []
+        if optimization['match_score'] < 60:
+            suggestions.append(f"⚠️ Add more relevant keywords. Current match: {optimization['match_score']}%")
+            if optimization['missing_keywords']:
+                suggestions.append(f"📝 Consider adding: {', '.join(optimization['missing_keywords'][:5])}")
+        else:
+            suggestions.append("✅ Good keyword match!")
+        
+        if not (has_email and has_phone):
+            suggestions.append("📞 Add complete contact information (email and phone)")
+        else:
+            suggestions.append("✅ Contact information present")
+        
+        if word_count < 400:
+            suggestions.append(f"📄 Resume is too short ({word_count} words). Aim for 400-800 words")
+        elif word_count > 800:
+            suggestions.append(f"📄 Resume is too long ({word_count} words). Consider condensing to 400-800 words")
+        else:
+            suggestions.append("✅ Good resume length")
+        
+        return jsonify({
+            "ats_score": overall_score,
+            "keyword_match_score": optimization['match_score'],
+            "format_score": format_score,
+            "matched_skills": optimization['matched_skills'][:10],  # Limit to top 10
+            "missing_keywords": optimization['missing_keywords'][:10],  # Limit to top 10
+            "suggestions": suggestions,
+            "word_count": word_count
+        })
+    
+    except Exception as e:
+        app.logger.error(f"Error checking ATS score: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({"error": str(e)}), 500
+    
 # Health check endpoint
 @app.route('/health')
 def health():
