@@ -11,6 +11,7 @@ import json
 import os
 from pdf2image import convert_from_bytes
 from models.fixed_template_renderer import FixedTemplateRenderer
+from models.resume_parser import ResumeParser
 import logging
 import yake
 from collections import Counter
@@ -377,9 +378,10 @@ def scrape_jobs():
 # -----------------------------
 # Resume Optimization Endpoint (Improved)
 # -----------------------------
+
 @app.route('/optimize_resume', methods=['POST'])
 def optimize_resume():
-    """Optimize resume based on job description with improved matching"""
+    """Optimize resume based on job description with full content extraction"""
     if 'resume' not in request.files:
         return jsonify({"error": "No resume uploaded"}), 400
 
@@ -393,105 +395,37 @@ def optimize_resume():
         return jsonify({"error": "Could not extract text from resume"}), 400
 
     try:
-        # Clean and analyze resume
+        # Parse the resume to extract structured data
+        parser = ResumeParser()
+        parsed_data = parser.parse_resume(resume_text)
+        
+        app.logger.info(f"Parsed resume data: {parsed_data['personal_info']['name']}")
+        
+        # Clean and analyze resume for skill matching
         cleaned_text = clean_text(resume_text)
         
         # Optimize based on job description
         if job_description:
             optimization = optimize_resume_content(cleaned_text, job_description)
             summary = optimization['summary']
-            matched_skills = optimization['matched_skills']
-            match_score = optimization['match_score']
-            
-            app.logger.info(f"Resume optimization - Match score: {match_score}%")
-            app.logger.info(f"Matched skills: {matched_skills}")
+            app.logger.info(f"Match score: {optimization['match_score']}%")
         else:
-            # No job description, use extracted skills
-            resume_skills = extract_skills(cleaned_text, IT_SKILL_LIST + NON_IT_SKILL_LIST)
-            summary = (
+            summary = parsed_data.get('professional_summary', '') or (
                 "Experienced professional with demonstrated expertise in technology and innovation. "
-                "Proven track record of delivering high-impact solutions. "
-                "Strong analytical and problem-solving abilities."
+                "Proven track record of delivering high-impact solutions."
             )
-            matched_skills = resume_skills[:15]
-            match_score = 0
         
-        # Extract personal info from original resume (better extraction)
-        email_match = re.search(r'[\w\.-]+@[\w\.-]+\.\w+', resume_text)
-        phone_match = re.search(r'[\+\d][\d\-\(\)\s]{8,}', resume_text)
-        
-        # Extract name (usually first line or near email)
-        lines = resume_text.split('\n')
-        name = "Your Name"
-        for line in lines[:5]:  # Check first 5 lines
-            if len(line.strip()) > 2 and not '@' in line and not '+' in line:
-                # Likely a name
-                name = line.strip()
-                break
-        
-        # Categorize skills for better formatting
-        skill_categories = {
-            'programming': [],
-            'ml_ds': [],
-            'libraries': [],
-            'databases': [],
-            'platforms': []
-        }
-        
-        # Simple categorization
-        for skill in matched_skills:
-            skill_lower = skill.lower()
-            if any(lang in skill_lower for lang in ['python', 'java', 'javascript', 'c++', 'sql', 'c#']):
-                skill_categories['programming'].append(skill)
-            elif any(ml in skill_lower for ml in ['machine learning', 'deep learning', 'nlp', 'data science', 'ai']):
-                skill_categories['ml_ds'].append(skill)
-            elif any(lib in skill_lower for lib in ['tensorflow', 'pytorch', 'pandas', 'numpy', 'react', 'flask', 'django']):
-                skill_categories['libraries'].append(skill)
-            elif any(db in skill_lower for db in ['mysql', 'mongodb', 'postgresql', 'database', 'sql']):
-                skill_categories['databases'].append(skill)
-            else:
-                skill_categories['platforms'].append(skill)
-        
-        # Build optimized resume data with proper structure
+        # Build optimized resume data using PARSED content
         optimized_resume = {
-            "personal_info": {
-                "name": name,
-                "email": email_match.group(0) if email_match else "email@example.com",
-                "phone": phone_match.group(0) if phone_match else "+91-XXXXXXXXXX",
-                "location": "India",  # Default
-                "linkedin": "",
-                "github": ""
-            },
+            "personal_info": parsed_data['personal_info'],
             "professional_summary": summary,
-            "skills": skill_categories,  # Now it's a dictionary
-            "education": [
-                {
-                    "institution": "Your University",
-                    "degree": "Bachelor of Science",
-                    "field": "Computer Science",
-                    "cgpa": "",
-                    "duration": "2020 - 2024",
-                    "location": "India"
-                }
-            ],
-            "experience": [],
-            "projects": [
-                {
-                    "name": "Sample Project",
-                    "technologies": ", ".join(matched_skills[:5]) if matched_skills else "Python, Machine Learning",
-                    "description": [
-                        "Developed innovative solutions using modern technologies",
-                        "Implemented best practices and optimized performance"
-                    ]
-                }
-            ],
-            "certifications": [
-                "Relevant certifications in " + (matched_skills[0] if matched_skills else "Technology")
-            ],
-            "achievements": [
-                "Demonstrated expertise in key technical areas",
-                "Strong problem-solving and analytical skills"
-            ]
+            "education": parsed_data['education'],
+            "experience": parsed_data['experience'],
+            "projects": parsed_data['projects'],
+            "skills": parsed_data['skills'],
+            "certifications": parsed_data['certifications'],
+            "achievements": parsed_data['achievements'],
+            "research": parsed_data['research']
         }
         
         # Ensure static directory exists
