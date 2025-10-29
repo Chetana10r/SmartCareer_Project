@@ -1,90 +1,90 @@
-import React, { useState } from 'react';
-import axios from 'axios';
-import './ResumeOptimizer.css';
+import React, { useState } from "react";
+import axios from "axios";
+import "./ResumeOptimizer.css";
 
 const ResumeOptimizer = () => {
-  const [mode, setMode] = useState('optimize'); // 'optimize' or 'create'
+  const [mode, setMode] = useState("optimize"); // 'optimize' or 'create'
   const [resumeFile, setResumeFile] = useState(null);
-  const [jobDescription, setJobDescription] = useState('');
+  const [jobDescription, setJobDescription] = useState("");
   const [loading, setLoading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
-  const [successMessage, setSuccessMessage] = useState('');
-  const [errorMessage, setErrorMessage] = useState('');
+  const [successMessage, setSuccessMessage] = useState("");
+  const [errorMessage, setErrorMessage] = useState("");
   const [atsScore, setAtsScore] = useState(null);
-  
+
   // Form data for creating resume from scratch
   const [formData, setFormData] = useState({
-    name: '',
-    email: '',
-    phone: '',
-    location: '',
-    linkedin: '',
-    github: '',
-    summary: '',
+    name: "",
+    email: "",
+    phone: "",
+    location: "",
+    linkedin: "",
+    github: "",
+    summary: "",
     skills: {
-      programming: '',
-      ml_ds: '',
-      libraries: '',
-      databases: '',
-      platforms: ''
+      programming: "",
+      ml_ds: "",
+      libraries: "",
+      databases: "",
+      platforms: "",
     },
     education: [
       {
-        institution: '',
-        degree: '',
-        field: '',
-        cgpa: '',
-        duration: '',
-        location: ''
-      }
+        institution: "",
+        degree: "",
+        field: "",
+        cgpa: "",
+        duration: "",
+        location: "",
+      },
     ],
     experience: [
       {
-        company: '',
-        title: '',
-        location: '',
-        duration: '',
-        responsibilities: ['']
-      }
+        company: "",
+        title: "",
+        location: "",
+        duration: "",
+        responsibilities: [""],
+      },
     ],
     projects: [
       {
-        name: '',
-        technologies: '',
-        description: ['']
-      }
+        name: "",
+        technologies: "",
+        description: [""],
+      },
     ],
-    certifications: [''],
-    achievements: ['']
+    certifications: [""],
+    achievements: [""],
   });
 
   // File upload handler
   const handleFileChange = (e) => {
     const file = e.target.files[0];
-    if (file && file.type === 'application/pdf') {
+    if (file && file.type === "application/pdf") {
       setResumeFile(file);
-      setErrorMessage('');
+      setErrorMessage("");
       setAtsScore(null);
     } else {
-      setErrorMessage('Please upload a valid PDF file');
+      setErrorMessage("Please upload a valid PDF file");
       setResumeFile(null);
     }
   };
 
   // Form input handlers
   const handlePersonalInfoChange = (field, value) => {
-    setFormData(prev => ({ ...prev, [field]: value }));
+    setFormData((prev) => ({ ...prev, [field]: value }));
   };
 
   const handleSkillsChange = (field, value) => {
-    setFormData(prev => ({
+    setFormData((prev) => ({
       ...prev,
-      skills: { ...prev.skills, [field]: value }
+      skills: { ...prev.skills, [field]: value },
     }));
   };
 
   const handleArrayFieldChange = (section, index, field, value) => {
-    setFormData(prev => {
+    setFormData((prev) => {
       const updated = [...prev[section]];
       updated[index][field] = value;
       return { ...prev, [section]: updated };
@@ -92,7 +92,7 @@ const ResumeOptimizer = () => {
   };
 
   const handleSubArrayChange = (section, index, subField, subIndex, value) => {
-    setFormData(prev => {
+    setFormData((prev) => {
       const updated = [...prev[section]];
       updated[index][subField][subIndex] = value;
       return { ...prev, [section]: updated };
@@ -100,31 +100,33 @@ const ResumeOptimizer = () => {
   };
 
   const addArrayItem = (section, template) => {
-    setFormData(prev => ({
+    setFormData((prev) => ({
       ...prev,
-      [section]: [...prev[section], template]
+      [section]: [...prev[section], template],
     }));
   };
 
   const removeArrayItem = (section, index) => {
-    setFormData(prev => ({
+    setFormData((prev) => ({
       ...prev,
-      [section]: prev[section].filter((_, i) => i !== index)
+      [section]: prev[section].filter((_, i) => i !== index),
     }));
   };
 
   const addSubArrayItem = (section, index, subField) => {
-    setFormData(prev => {
+    setFormData((prev) => {
       const updated = [...prev[section]];
-      updated[index][subField].push('');
+      updated[index][subField].push("");
       return { ...prev, [section]: updated };
     });
   };
 
   const removeSubArrayItem = (section, index, subField, subIndex) => {
-    setFormData(prev => {
+    setFormData((prev) => {
       const updated = [...prev[section]];
-      updated[index][subField] = updated[index][subField].filter((_, i) => i !== subIndex);
+      updated[index][subField] = updated[index][subField].filter(
+        (_, i) => i !== subIndex
+      );
       return { ...prev, [section]: updated };
     });
   };
@@ -132,28 +134,34 @@ const ResumeOptimizer = () => {
   // Check ATS Score
   const handleCheckATS = async () => {
     if (!resumeFile) {
-      setErrorMessage('Please upload a resume file');
+      setErrorMessage("Please upload a resume file");
       return;
     }
     if (!jobDescription.trim()) {
-      setErrorMessage('Please enter the job description to check ATS score');
+      setErrorMessage("Please enter the job description to check ATS score");
       return;
     }
 
     setLoading(true);
-    setErrorMessage('');
+    setErrorMessage("");
 
     try {
       const formDataToSend = new FormData();
-      formDataToSend.append('resume', resumeFile);
-      formDataToSend.append('job_description', jobDescription);
+      formDataToSend.append("resume", resumeFile);
+      formDataToSend.append("job_description", jobDescription);
 
-      const response = await axios.post('http://127.0.0.1:5000/check_ats_score', formDataToSend);
+      const response = await axios.post(
+        "http://127.0.0.1:5000/check_ats_score",
+        formDataToSend
+      );
       setAtsScore(response.data);
-      setSuccessMessage('✅ ATS Score calculated successfully!');
-      setTimeout(() => setSuccessMessage(''), 3000);
+      setSuccessMessage("✅ ATS Score calculated successfully!");
+      setTimeout(() => setSuccessMessage(""), 3000);
     } catch (error) {
-      setErrorMessage('❌ Error checking ATS score: ' + (error.response?.data?.error || error.message));
+      setErrorMessage(
+        "❌ Error checking ATS score: " +
+          (error.response?.data?.error || error.message)
+      );
     } finally {
       setLoading(false);
     }
@@ -162,36 +170,45 @@ const ResumeOptimizer = () => {
   // Optimize existing resume
   const handleOptimizeResume = async () => {
     if (!resumeFile) {
-      setErrorMessage('Please upload a resume file');
+      setErrorMessage("Please upload a resume file");
       return;
     }
     if (!jobDescription.trim()) {
-      setErrorMessage('Please enter the job description');
+      setErrorMessage("Please enter the job description");
       return;
     }
 
     setLoading(true);
-    setErrorMessage('');
+    setErrorMessage("");
     setUploadProgress(0);
 
     try {
       const formDataToSend = new FormData();
-      formDataToSend.append('resume', resumeFile);
-      formDataToSend.append('job_description', jobDescription);
+      formDataToSend.append("resume", resumeFile);
+      formDataToSend.append("job_description", jobDescription);
 
-      const response = await axios.post('http://127.0.0.1:5000/optimize_resume', formDataToSend, {
-        responseType: 'blob',
-        onUploadProgress: (progressEvent) => {
-          const percentCompleted = Math.round((progressEvent.loaded * 100) / progressEvent.total);
-          setUploadProgress(percentCompleted);
+      const response = await axios.post(
+        "http://127.0.0.1:5000/optimize_resume",
+        formDataToSend,
+        {
+          responseType: "blob",
+          onUploadProgress: (progressEvent) => {
+            const percentCompleted = Math.round(
+              (progressEvent.loaded * 100) / progressEvent.total
+            );
+            setUploadProgress(percentCompleted);
+          },
         }
-      });
+      );
 
-      downloadPDF(response.data, 'optimized_resume.pdf');
-      setSuccessMessage('✅ Resume optimized successfully!');
-      setTimeout(() => setSuccessMessage(''), 5000);
+      downloadPDF(response.data, "optimized_resume.pdf");
+      setSuccessMessage("✅ Resume optimized successfully!");
+      setTimeout(() => setSuccessMessage(""), 5000);
     } catch (error) {
-      setErrorMessage('❌ Error optimizing resume: ' + (error.response?.data?.error || error.message));
+      setErrorMessage(
+        "❌ Error optimizing resume: " +
+          (error.response?.data?.error || error.message)
+      );
     } finally {
       setLoading(false);
       setUploadProgress(0);
@@ -201,26 +218,33 @@ const ResumeOptimizer = () => {
   // Create new resume
   const handleCreateResume = async () => {
     if (!formData.name || !formData.email) {
-      setErrorMessage('Please fill in at least Name and Email');
+      setErrorMessage("Please fill in at least Name and Email");
       return;
     }
 
     setLoading(true);
-    setErrorMessage('');
+    setErrorMessage("");
 
     try {
-      const response = await axios.post('http://127.0.0.1:5000/create_resume', {
-        ...formData,
-        job_description: jobDescription
-      }, {
-        responseType: 'blob'
-      });
+      const response = await axios.post(
+        "http://127.0.0.1:5000/create_resume",
+        {
+          ...formData,
+          job_description: jobDescription,
+        },
+        {
+          responseType: "blob",
+        }
+      );
 
-      downloadPDF(response.data, 'generated_resume.pdf');
-      setSuccessMessage('✅ Resume created successfully!');
-      setTimeout(() => setSuccessMessage(''), 5000);
+      downloadPDF(response.data, "generated_resume.pdf");
+      setSuccessMessage("✅ Resume created successfully!");
+      setTimeout(() => setSuccessMessage(""), 5000);
     } catch (error) {
-      setErrorMessage('❌ Error creating resume: ' + (error.response?.data?.error || error.message));
+      setErrorMessage(
+        "❌ Error creating resume: " +
+          (error.response?.data?.error || error.message)
+      );
     } finally {
       setLoading(false);
     }
@@ -228,10 +252,12 @@ const ResumeOptimizer = () => {
 
   // Download PDF helper
   const downloadPDF = (blob, filename) => {
-    const url = window.URL.createObjectURL(new Blob([blob], { type: 'application/pdf' }));
-    const link = document.createElement('a');
+    const url = window.URL.createObjectURL(
+      new Blob([blob], { type: "application/pdf" })
+    );
+    const link = document.createElement("a");
     link.href = url;
-    link.setAttribute('download', filename);
+    link.setAttribute("download", filename);
     document.body.appendChild(link);
     link.click();
     link.remove();
@@ -241,54 +267,78 @@ const ResumeOptimizer = () => {
   return (
     <div className="optimizer-container">
       {/* Header */}
-      <div className="header-section">
+      <div className="header-section styled-header">
         <div className="header-content">
           <h1 className="main-title">
-            <span className="title-icon">🎯</span>
+            <span role="img" aria-label="target" className="title-icon">
+              🎯
+            </span>
             AI Resume Builder & Optimizer
           </h1>
           <p className="subtitle">
-            Create ATS-friendly resumes or optimize existing ones for your dream job
+            Create ATS-friendly resumes or optimize existing ones for your dream
+            job
           </p>
         </div>
       </div>
 
       {/* Messages */}
       {successMessage && (
-        <div className="alert alert-success">
-          {successMessage}
-        </div>
+        <div className="alert alert-success">{successMessage}</div>
       )}
-      {errorMessage && (
-        <div className="alert alert-error">
-          {errorMessage}
-        </div>
-      )}
+      {errorMessage && <div className="alert alert-error">{errorMessage}</div>}
 
       {/* Mode Selector */}
       <div className="mode-selector">
         <button
           onClick={() => {
-            setMode('optimize');
+            setMode("optimize");
             setAtsScore(null);
           }}
-          className={`mode-button ${mode === 'optimize' ? 'active' : ''}`}
+          className={`mode-button ${mode === "optimize" ? "active" : ""}`}
+          style={{
+            background:
+              mode === "optimize"
+                ? "linear-gradient(90deg, #7442ff 0%, #6fd6ff 100%)"
+                : "linear-gradient(90deg, #bcbcbc 0%, #f7f7f7 100%)",
+            color: mode === "optimize" ? "#fff" : "#222",
+            boxShadow:
+              mode === "optimize" ? "0 3px 16px rgba(116,66,255,0.3)" : "",
+            fontWeight: "600",
+            borderRadius: "30px",
+            marginRight: "1em",
+            transition: "all 0.25s linear",
+          }}
         >
-          📄 Optimize Existing Resume
+          📄 Optimize Resume
         </button>
+
         <button
           onClick={() => {
-            setMode('create');
+            setMode("create");
             setAtsScore(null);
           }}
-          className={`mode-button ${mode === 'create' ? 'active' : ''}`}
+          className={`mode-button ${mode === "create" ? "active" : ""}`}
+          style={{
+            background:
+              mode === "create"
+                ? "linear-gradient(90deg, #42e695 0%, #3bb2b8 100%)"
+                : "linear-gradient(90deg, #bcbcbc 0%, #f7f7f7 100%)",
+            color: mode === "create" ? "#fff" : "#222",
+            boxShadow:
+              mode === "create" ? "0 3px 16px rgba(66,230,149,0.26)" : "",
+            fontWeight: "600",
+            borderRadius: "30px",
+            marginLeft: "1em",
+            transition: "all 0.25s linear",
+          }}
         >
           ✨ Create New Resume
         </button>
       </div>
 
       <div className="content-wrapper">
-        {mode === 'optimize' ? (
+        {mode === "optimize" ? (
           <>
             {/* Optimize Mode */}
             <div className="card">
@@ -311,10 +361,13 @@ const ResumeOptimizer = () => {
                       {resumeFile ? (
                         <>
                           <span className="file-name">{resumeFile.name}</span>
-                          <span className="file-size"> ({(resumeFile.size / 1024).toFixed(2)} KB)</span>
+                          <span className="file-size">
+                            {" "}
+                            ({(resumeFile.size / 1024).toFixed(2)} KB)
+                          </span>
                         </>
                       ) : (
-                        'Click to upload or drag and drop'
+                        "Click to upload or drag and drop"
                       )}
                     </p>
                     <p className="upload-hint">PDF files only (Max 5MB)</p>
@@ -358,36 +411,46 @@ const ResumeOptimizer = () => {
                     <div className="score-breakdown">
                       <div className="score-item">
                         <span className="score-item-label">Keyword Match:</span>
-                        <span className="score-item-value">{atsScore.keyword_match_score}%</span>
+                        <span className="score-item-value">
+                          {atsScore.keyword_match_score}%
+                        </span>
                       </div>
                       <div className="score-item">
                         <span className="score-item-label">Format Score:</span>
-                        <span className="score-item-value">{atsScore.format_score}%</span>
+                        <span className="score-item-value">
+                          {atsScore.format_score}%
+                        </span>
                       </div>
                     </div>
                   </div>
 
-                  {atsScore.matched_skills && atsScore.matched_skills.length > 0 && (
-                    <div className="skills-section">
-                      <h3>✅ Matched Skills:</h3>
-                      <div className="skills-tags">
-                        {atsScore.matched_skills.map((skill, idx) => (
-                          <span key={idx} className="skill-tag matched">{skill}</span>
-                        ))}
+                  {atsScore.matched_skills &&
+                    atsScore.matched_skills.length > 0 && (
+                      <div className="skills-section">
+                        <h3>✅ Matched Skills:</h3>
+                        <div className="skills-tags">
+                          {atsScore.matched_skills.map((skill, idx) => (
+                            <span key={idx} className="skill-tag matched">
+                              {skill}
+                            </span>
+                          ))}
+                        </div>
                       </div>
-                    </div>
-                  )}
+                    )}
 
-                  {atsScore.missing_keywords && atsScore.missing_keywords.length > 0 && (
-                    <div className="skills-section">
-                      <h3>❌ Missing Keywords:</h3>
-                      <div className="skills-tags">
-                        {atsScore.missing_keywords.map((keyword, idx) => (
-                          <span key={idx} className="skill-tag missing">{keyword}</span>
-                        ))}
+                  {atsScore.missing_keywords &&
+                    atsScore.missing_keywords.length > 0 && (
+                      <div className="skills-section">
+                        <h3>❌ Missing Keywords:</h3>
+                        <div className="skills-tags">
+                          {atsScore.missing_keywords.map((keyword, idx) => (
+                            <span key={idx} className="skill-tag missing">
+                              {keyword}
+                            </span>
+                          ))}
+                        </div>
                       </div>
-                    </div>
-                  )}
+                    )}
 
                   {atsScore.suggestions && (
                     <div className="suggestions-section">
@@ -407,8 +470,8 @@ const ResumeOptimizer = () => {
             {loading && uploadProgress > 0 && (
               <div className="progress-container">
                 <div className="progress-bar">
-                  <div 
-                    className="progress-fill" 
+                  <div
+                    className="progress-fill"
                     style={{ width: `${uploadProgress}%` }}
                   />
                 </div>
@@ -417,19 +480,30 @@ const ResumeOptimizer = () => {
             )}
 
             {/* Action Buttons */}
-            <div className="action-section">
+            <div className="action-section centered-action">
               <div className="button-group">
                 <button
                   onClick={handleCheckATS}
                   disabled={loading || !resumeFile || !jobDescription.trim()}
-                  className="secondary-button"
+                  className="secondary-button creative-button"
                 >
-                  {loading ? '⏳ Checking...' : '📊 Check ATS Score'}
+                  {loading ? (
+                    <>
+                      <span className="spinner"></span>
+                      <span>⏳ Checking...</span>
+                    </>
+                  ) : (
+                    <>
+                      <span className="button-icon">📊</span>
+                      <span>Check ATS Score</span>
+                    </>
+                  )}
                 </button>
+
                 <button
                   onClick={handleOptimizeResume}
                   disabled={loading || !resumeFile || !jobDescription.trim()}
-                  className="optimize-button"
+                  className="optimize-button creative-button"
                 >
                   {loading ? (
                     <>
@@ -464,7 +538,9 @@ const ResumeOptimizer = () => {
                     <input
                       type="text"
                       value={formData.name}
-                      onChange={(e) => handlePersonalInfoChange('name', e.target.value)}
+                      onChange={(e) =>
+                        handlePersonalInfoChange("name", e.target.value)
+                      }
                       placeholder="John Doe"
                       className="form-input"
                       required
@@ -479,7 +555,9 @@ const ResumeOptimizer = () => {
                     <input
                       type="email"
                       value={formData.email}
-                      onChange={(e) => handlePersonalInfoChange('email', e.target.value)}
+                      onChange={(e) =>
+                        handlePersonalInfoChange("email", e.target.value)
+                      }
                       placeholder="john.doe@example.com"
                       className="form-input"
                       required
@@ -494,7 +572,9 @@ const ResumeOptimizer = () => {
                     <input
                       type="tel"
                       value={formData.phone}
-                      onChange={(e) => handlePersonalInfoChange('phone', e.target.value)}
+                      onChange={(e) =>
+                        handlePersonalInfoChange("phone", e.target.value)
+                      }
                       placeholder="+91-1234567890"
                       className="form-input"
                     />
@@ -508,7 +588,9 @@ const ResumeOptimizer = () => {
                     <input
                       type="text"
                       value={formData.location}
-                      onChange={(e) => handlePersonalInfoChange('location', e.target.value)}
+                      onChange={(e) =>
+                        handlePersonalInfoChange("location", e.target.value)
+                      }
                       placeholder="City, Country"
                       className="form-input"
                     />
@@ -522,7 +604,9 @@ const ResumeOptimizer = () => {
                     <input
                       type="url"
                       value={formData.linkedin}
-                      onChange={(e) => handlePersonalInfoChange('linkedin', e.target.value)}
+                      onChange={(e) =>
+                        handlePersonalInfoChange("linkedin", e.target.value)
+                      }
                       placeholder="linkedin.com/in/username"
                       className="form-input"
                     />
@@ -536,7 +620,9 @@ const ResumeOptimizer = () => {
                     <input
                       type="url"
                       value={formData.github}
-                      onChange={(e) => handlePersonalInfoChange('github', e.target.value)}
+                      onChange={(e) =>
+                        handlePersonalInfoChange("github", e.target.value)
+                      }
                       placeholder="github.com/username"
                       className="form-input"
                     />
@@ -570,7 +656,9 @@ const ResumeOptimizer = () => {
                 <textarea
                   rows={4}
                   value={formData.summary}
-                  onChange={(e) => handlePersonalInfoChange('summary', e.target.value)}
+                  onChange={(e) =>
+                    handlePersonalInfoChange("summary", e.target.value)
+                  }
                   placeholder="Write a brief professional summary (2-3 sentences)..."
                   className="textarea"
                 />
@@ -585,22 +673,30 @@ const ResumeOptimizer = () => {
               <div className="card-body">
                 <div className="form-grid-single">
                   <div className="form-group">
-                    <label className="form-label">Programming & Languages</label>
+                    <label className="form-label">
+                      Programming & Languages
+                    </label>
                     <input
                       type="text"
                       value={formData.skills.programming}
-                      onChange={(e) => handleSkillsChange('programming', e.target.value)}
+                      onChange={(e) =>
+                        handleSkillsChange("programming", e.target.value)
+                      }
                       placeholder="Python, Java, SQL, C++"
                       className="form-input"
                     />
                   </div>
 
                   <div className="form-group">
-                    <label className="form-label">Machine Learning & Data Science</label>
+                    <label className="form-label">
+                      Machine Learning & Data Science
+                    </label>
                     <input
                       type="text"
                       value={formData.skills.ml_ds}
-                      onChange={(e) => handleSkillsChange('ml_ds', e.target.value)}
+                      onChange={(e) =>
+                        handleSkillsChange("ml_ds", e.target.value)
+                      }
                       placeholder="Machine Learning, NLP, Deep Learning"
                       className="form-input"
                     />
@@ -611,7 +707,9 @@ const ResumeOptimizer = () => {
                     <input
                       type="text"
                       value={formData.skills.libraries}
-                      onChange={(e) => handleSkillsChange('libraries', e.target.value)}
+                      onChange={(e) =>
+                        handleSkillsChange("libraries", e.target.value)
+                      }
                       placeholder="TensorFlow, Pandas, React, Flask"
                       className="form-input"
                     />
@@ -622,18 +720,24 @@ const ResumeOptimizer = () => {
                     <input
                       type="text"
                       value={formData.skills.databases}
-                      onChange={(e) => handleSkillsChange('databases', e.target.value)}
+                      onChange={(e) =>
+                        handleSkillsChange("databases", e.target.value)
+                      }
                       placeholder="MySQL, MongoDB, Git, Docker"
                       className="form-input"
                     />
                   </div>
 
                   <div className="form-group">
-                    <label className="form-label">Platforms & Operating Systems</label>
+                    <label className="form-label">
+                      Platforms & Operating Systems
+                    </label>
                     <input
                       type="text"
                       value={formData.skills.platforms}
-                      onChange={(e) => handleSkillsChange('platforms', e.target.value)}
+                      onChange={(e) =>
+                        handleSkillsChange("platforms", e.target.value)
+                      }
                       placeholder="Windows, Linux, AWS, Azure"
                       className="form-input"
                     />
@@ -648,14 +752,16 @@ const ResumeOptimizer = () => {
                 <span className="step-number">5</span>
                 <h2 className="card-title">Education</h2>
                 <button
-                  onClick={() => addArrayItem('education', {
-                    institution: '',
-                    degree: '',
-                    field: '',
-                    cgpa: '',
-                    duration: '',
-                    location: ''
-                  })}
+                  onClick={() =>
+                    addArrayItem("education", {
+                      institution: "",
+                      degree: "",
+                      field: "",
+                      cgpa: "",
+                      duration: "",
+                      location: "",
+                    })
+                  }
                   className="add-button"
                 >
                   + Add Education
@@ -668,7 +774,7 @@ const ResumeOptimizer = () => {
                       <h3>Education #{index + 1}</h3>
                       {formData.education.length > 1 && (
                         <button
-                          onClick={() => removeArrayItem('education', index)}
+                          onClick={() => removeArrayItem("education", index)}
                           className="remove-button"
                         >
                           ✕ Remove
@@ -681,7 +787,14 @@ const ResumeOptimizer = () => {
                         <input
                           type="text"
                           value={edu.institution}
-                          onChange={(e) => handleArrayFieldChange('education', index, 'institution', e.target.value)}
+                          onChange={(e) =>
+                            handleArrayFieldChange(
+                              "education",
+                              index,
+                              "institution",
+                              e.target.value
+                            )
+                          }
                           placeholder="University Name"
                           className="form-input"
                         />
@@ -691,7 +804,14 @@ const ResumeOptimizer = () => {
                         <input
                           type="text"
                           value={edu.degree}
-                          onChange={(e) => handleArrayFieldChange('education', index, 'degree', e.target.value)}
+                          onChange={(e) =>
+                            handleArrayFieldChange(
+                              "education",
+                              index,
+                              "degree",
+                              e.target.value
+                            )
+                          }
                           placeholder="B.Sc., M.Sc., B.Tech"
                           className="form-input"
                         />
@@ -701,7 +821,14 @@ const ResumeOptimizer = () => {
                         <input
                           type="text"
                           value={edu.field}
-                          onChange={(e) => handleArrayFieldChange('education', index, 'field', e.target.value)}
+                          onChange={(e) =>
+                            handleArrayFieldChange(
+                              "education",
+                              index,
+                              "field",
+                              e.target.value
+                            )
+                          }
                           placeholder="Computer Science"
                           className="form-input"
                         />
@@ -711,7 +838,14 @@ const ResumeOptimizer = () => {
                         <input
                           type="text"
                           value={edu.cgpa}
-                          onChange={(e) => handleArrayFieldChange('education', index, 'cgpa', e.target.value)}
+                          onChange={(e) =>
+                            handleArrayFieldChange(
+                              "education",
+                              index,
+                              "cgpa",
+                              e.target.value
+                            )
+                          }
                           placeholder="9.5 or 95%"
                           className="form-input"
                         />
@@ -721,7 +855,14 @@ const ResumeOptimizer = () => {
                         <input
                           type="text"
                           value={edu.duration}
-                          onChange={(e) => handleArrayFieldChange('education', index, 'duration', e.target.value)}
+                          onChange={(e) =>
+                            handleArrayFieldChange(
+                              "education",
+                              index,
+                              "duration",
+                              e.target.value
+                            )
+                          }
                           placeholder="Jul 2020 – Jun 2024"
                           className="form-input"
                         />
@@ -731,7 +872,14 @@ const ResumeOptimizer = () => {
                         <input
                           type="text"
                           value={edu.location}
-                          onChange={(e) => handleArrayFieldChange('education', index, 'location', e.target.value)}
+                          onChange={(e) =>
+                            handleArrayFieldChange(
+                              "education",
+                              index,
+                              "location",
+                              e.target.value
+                            )
+                          }
                           placeholder="City, Country"
                           className="form-input"
                         />
@@ -748,11 +896,13 @@ const ResumeOptimizer = () => {
                 <span className="step-number">6</span>
                 <h2 className="card-title">Projects</h2>
                 <button
-                  onClick={() => addArrayItem('projects', {
-                    name: '',
-                    technologies: '',
-                    description: ['']
-                  })}
+                  onClick={() =>
+                    addArrayItem("projects", {
+                      name: "",
+                      technologies: "",
+                      description: [""],
+                    })
+                  }
                   className="add-button"
                 >
                   + Add Project
@@ -765,7 +915,7 @@ const ResumeOptimizer = () => {
                       <h3>Project #{index + 1}</h3>
                       {formData.projects.length > 1 && (
                         <button
-                          onClick={() => removeArrayItem('projects', index)}
+                          onClick={() => removeArrayItem("projects", index)}
                           className="remove-button"
                         >
                           ✕ Remove
@@ -778,7 +928,14 @@ const ResumeOptimizer = () => {
                         <input
                           type="text"
                           value={project.name}
-                          onChange={(e) => handleArrayFieldChange('projects', index, 'name', e.target.value)}
+                          onChange={(e) =>
+                            handleArrayFieldChange(
+                              "projects",
+                              index,
+                              "name",
+                              e.target.value
+                            )
+                          }
                           placeholder="AI Chatbot System"
                           className="form-input"
                         />
@@ -788,7 +945,14 @@ const ResumeOptimizer = () => {
                         <input
                           type="text"
                           value={project.technologies}
-                          onChange={(e) => handleArrayFieldChange('projects', index, 'technologies', e.target.value)}
+                          onChange={(e) =>
+                            handleArrayFieldChange(
+                              "projects",
+                              index,
+                              "technologies",
+                              e.target.value
+                            )
+                          }
                           placeholder="Python, Flask, TensorFlow"
                           className="form-input"
                         />
@@ -800,14 +964,29 @@ const ResumeOptimizer = () => {
                             <textarea
                               rows={2}
                               value={desc}
-                              onChange={(e) => handleSubArrayChange('projects', index, 'description', descIndex, e.target.value)}
+                              onChange={(e) =>
+                                handleSubArrayChange(
+                                  "projects",
+                                  index,
+                                  "description",
+                                  descIndex,
+                                  e.target.value
+                                )
+                              }
                               placeholder="Describe your achievement or contribution..."
                               className="form-input"
                             />
                             <div className="sub-array-buttons">
                               {project.description.length > 1 && (
                                 <button
-                                  onClick={() => removeSubArrayItem('projects', index, 'description', descIndex)}
+                                  onClick={() =>
+                                    removeSubArrayItem(
+                                      "projects",
+                                      index,
+                                      "description",
+                                      descIndex
+                                    )
+                                  }
                                   className="remove-button-small"
                                 >
                                   ✕
@@ -817,7 +996,9 @@ const ResumeOptimizer = () => {
                           </div>
                         ))}
                         <button
-                          onClick={() => addSubArrayItem('projects', index, 'description')}
+                          onClick={() =>
+                            addSubArrayItem("projects", index, "description")
+                          }
                           className="add-button-small"
                         >
                           + Add Description Point
@@ -844,14 +1025,17 @@ const ResumeOptimizer = () => {
                       onChange={(e) => {
                         const updated = [...formData.certifications];
                         updated[index] = e.target.value;
-                        setFormData(prev => ({ ...prev, certifications: updated }));
+                        setFormData((prev) => ({
+                          ...prev,
+                          certifications: updated,
+                        }));
                       }}
                       placeholder="e.g., AWS Certified Developer (2024)"
                       className="form-input"
                     />
                     {formData.certifications.length > 1 && (
                       <button
-                        onClick={() => removeArrayItem('certifications', index)}
+                        onClick={() => removeArrayItem("certifications", index)}
                         className="remove-button-small"
                       >
                         ✕
@@ -860,7 +1044,7 @@ const ResumeOptimizer = () => {
                   </div>
                 ))}
                 <button
-                  onClick={() => addArrayItem('certifications', '')}
+                  onClick={() => addArrayItem("certifications", "")}
                   className="add-button-small"
                 >
                   + Add Certification
@@ -883,14 +1067,17 @@ const ResumeOptimizer = () => {
                       onChange={(e) => {
                         const updated = [...formData.achievements];
                         updated[index] = e.target.value;
-                        setFormData(prev => ({ ...prev, achievements: updated }));
+                        setFormData((prev) => ({
+                          ...prev,
+                          achievements: updated,
+                        }));
                       }}
                       placeholder="e.g., First Place in Hackathon 2024"
                       className="form-input"
                     />
                     {formData.achievements.length > 1 && (
                       <button
-                        onClick={() => removeArrayItem('achievements', index)}
+                        onClick={() => removeArrayItem("achievements", index)}
                         className="remove-button-small"
                       >
                         ✕
@@ -899,7 +1086,7 @@ const ResumeOptimizer = () => {
                   </div>
                 ))}
                 <button
-                  onClick={() => addArrayItem('achievements', '')}
+                  onClick={() => addArrayItem("achievements", "")}
                   className="add-button-small"
                 >
                   + Add Achievement
@@ -907,12 +1094,12 @@ const ResumeOptimizer = () => {
               </div>
             </div>
 
-            {/* Action Button for Create Mode */}
-            <div className="action-section">
+            {/* Submit Button */}
+            <div className="action-section centered-action">
               <button
                 onClick={handleCreateResume}
                 disabled={loading || !formData.name || !formData.email}
-                className="optimize-button"
+                className="create-resume-button"
               >
                 {loading ? (
                   <>
@@ -945,11 +1132,6 @@ const ResumeOptimizer = () => {
             <span>ATS-Friendly Format</span>
           </div>
         </div>
-      </div>
-
-      {/* Footer */}
-      <div className="footer">
-        <p>💡 Tip: Fill all sections for best results. ATS systems scan for complete information.</p>
       </div>
     </div>
   );

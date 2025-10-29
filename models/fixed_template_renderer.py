@@ -1,10 +1,9 @@
 import json
 from reportlab.lib.pagesizes import A4
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, HRFlowable
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
 from reportlab.lib.styles import ParagraphStyle
-from reportlab.lib.units import inch, mm
-from reportlab.lib import colors
-from reportlab.lib.enums import TA_LEFT, TA_RIGHT, TA_JUSTIFY
+from reportlab.lib.units import inch
+from reportlab.lib.enums import TA_LEFT
 from datetime import datetime
 import os
 
@@ -14,124 +13,112 @@ class FixedTemplateRenderer:
             with open(template_path, 'r') as f:
                 self.template = json.load(f)
         except FileNotFoundError:
-            self.template = self._get_default_template()
+            self.template = {}
         self.styles = self._create_custom_styles()
 
-    def _get_default_template(self):
-        """LaTeX template settings"""
-        return {
-            "typography": {
-                "fonts": {
-                    "name": "Helvetica-Bold",
-                    "heading": "Helvetica-Bold",
-                    "body": "Helvetica"
-                },
-                "sizes": {
-                    "name": 14,  # LARGE in LaTeX
-                    "contact": 10,
-                    "section_header": 12,  # large in LaTeX
-                    "body": 10,
-                    "subheading": 10
-                }
-            },
-            "layout_settings": {
-                "margins": {
-                    "top": 0.4,  # -0.6in adjustment
-                    "bottom": 0.5,
-                    "left": 0.4,  # -0.6in adjustment
-                    "right": 0.4
-                }
-            }
-        }
-
     def _create_custom_styles(self):
-        """Create styles matching LaTeX template"""
+        """Styles matching LaTeX template exactly"""
         styles = {}
         
-        # Header Name style - LARGE, Bold
+        # Name - LARGE and Bold
         styles['Name'] = ParagraphStyle(
             'Name',
             fontName='Helvetica-Bold',
             fontSize=14,
             alignment=TA_LEFT,
-            spaceAfter=0,
-            leading=17
+            spaceAfter=1,
+            leading=16
         )
-
-        # Contact info
+        
+        # Contact
         styles['Contact'] = ParagraphStyle(
             'Contact',
             fontName='Helvetica',
             fontSize=10,
             alignment=TA_LEFT,
-            spaceAfter=0,
+            spaceAfter=1,
             leading=12
         )
-
-        # Section Header - with underline
+        
+        # Section Header - Large, Bold, with line
         styles['SectionHeader'] = ParagraphStyle(
             'SectionHeader',
             fontName='Helvetica-Bold',
-            fontSize=12,
+            fontSize=11,
             alignment=TA_LEFT,
-            spaceBefore=7,  # 7pt before section
-            spaceAfter=5,   # 5pt after section
-            leading=14,
-            textTransform='uppercase'
+            spaceBefore=7,
+            spaceAfter=5,
+            leading=13
         )
-
-        # Institution/Company (bold, larger)
-        styles['Institution'] = ParagraphStyle(
-            'Institution',
+        
+        # Institution/Company name (bold, 10pt)
+        styles['InstitutionName'] = ParagraphStyle(
+            'InstitutionName',
             fontName='Helvetica-Bold',
             fontSize=10,
             alignment=TA_LEFT,
             spaceAfter=0,
             leading=12
         )
-
-        # Degree/Title (italic)
-        styles['Degree'] = ParagraphStyle(
-            'Degree',
+        
+        # Degree/Title (italic, 10pt)
+        styles['DegreeTitle'] = ParagraphStyle(
+            'DegreeTitle',
             fontName='Helvetica-Oblique',
             fontSize=10,
             alignment=TA_LEFT,
-            spaceAfter=2.5,  # topsep=2.5pt
+            spaceAfter=2.5,
             leading=12
         )
-
-        # Bullet items
+        
+        # Project header (bold, no bullet) - \resumeSubItem style
+        styles['ProjectHeader'] = ParagraphStyle(
+            'ProjectHeader',
+            fontName='Helvetica-Bold',
+            fontSize=10,
+            alignment=TA_LEFT,
+            leftIndent=0,
+            spaceAfter=0,
+            leading=12
+        )
+        
+        # Bullet item - \item style
         styles['BulletItem'] = ParagraphStyle(
             'BulletItem',
             fontName='Helvetica',
             fontSize=10,
             alignment=TA_LEFT,
-            leftIndent=0,
-            spaceAfter=0,  # itemsep=0pt
-            leading=12
+            leftIndent=20,
+            firstLineIndent=-10,
+            spaceAfter=0,
+            leading=12,
+            wordWrap='LTR'
         )
-
-        # Sub-bullet items (circle)
-        styles['SubBullet'] = ParagraphStyle(
-            'SubBullet',
+        
+        # Sub-bullet item - \labelitemii ($\circ$) style
+        styles['SubBulletItem'] = ParagraphStyle(
+            'SubBulletItem',
             fontName='Helvetica',
             fontSize=10,
             alignment=TA_LEFT,
-            leftIndent=15,
+            leftIndent=30,
+            firstLineIndent=-10,
             spaceAfter=0,
-            leading=12
+            leading=12,
+            wordWrap='LTR'
         )
-
-        # Skills label (bold)
-        styles['SkillLabel'] = ParagraphStyle(
-            'SkillLabel',
-            fontName='Helvetica-Bold',
+        
+        # Skills/Cert item - \resumeSubItem style
+        styles['SkillItem'] = ParagraphStyle(
+            'SkillItem',
+            fontName='Helvetica',
             fontSize=10,
             alignment=TA_LEFT,
+            leftIndent=0,
             spaceAfter=0,
             leading=12
         )
-
+        
         return styles
 
     def render_resume(self, resume_data, output_path=None):
@@ -141,7 +128,7 @@ class FixedTemplateRenderer:
             os.makedirs('static', exist_ok=True)
             output_path = f"static/resume_{timestamp}.pdf"
 
-        # LaTeX margins: -0.6in adjustment
+        # Match LaTeX margins: -0.6in adjustments
         doc = SimpleDocTemplate(
             output_path,
             pagesize=A4,
@@ -153,7 +140,6 @@ class FixedTemplateRenderer:
 
         story = []
         
-        # Render sections
         self._render_header(story, resume_data)
         self._render_education(story, resume_data)
         self._render_projects(story, resume_data)
@@ -167,19 +153,25 @@ class FixedTemplateRenderer:
         return output_path
 
     def _render_header(self, story, data):
-        """Header matching LaTeX tabular format"""
+        """
+        LaTeX format:
+        Name (LARGE, bold)  |  Phone (right)
+        Email: ...  |  Location: ... (right)
+        LinkedIn: ...
+        GitHub: ...
+        """
         pi = data.get('personal_info', {})
         
         name = pi.get('name', 'Full Name')
-        phone = pi.get('phone', '+91-XXXXXXXXXX')
-        email = pi.get('email', 'email@example.com')
-        location = pi.get('location', 'City, Country')
+        phone = pi.get('phone', '')
+        email = pi.get('email', '')
+        location = pi.get('location', '')
         linkedin = pi.get('linkedin', '')
         github = pi.get('github', '')
         
-        # Create table matching LaTeX header
+        # Header table matching LaTeX \begin{tabular*}
         header_data = [
-            [Paragraph(f"<b>{name}</b>", self.styles['Name']), 
+            [Paragraph(f"<b>{name.upper()}</b>", self.styles['Name']), 
              Paragraph(phone, self.styles['Contact'])],
             [Paragraph(f"Email: {email}", self.styles['Contact']),
              Paragraph(f"Location: {location}", self.styles['Contact'])],
@@ -197,8 +189,8 @@ class FixedTemplateRenderer:
                 Paragraph("", self.styles['Contact'])
             ])
         
-        header_table = Table(header_data, colWidths=[4.5*inch, 3*inch])
-        header_table.setStyle(TableStyle([
+        ht = Table(header_data, colWidths=[5*inch, 2.5*inch])
+        ht.setStyle(TableStyle([
             ('ALIGN', (0, 0), (0, -1), 'LEFT'),
             ('ALIGN', (1, 0), (1, -1), 'RIGHT'),
             ('VALIGN', (0, 0), (-1, -1), 'TOP'),
@@ -208,18 +200,24 @@ class FixedTemplateRenderer:
             ('BOTTOMPADDING', (0, 0), (-1, -1), 0),
         ]))
         
-        story.append(header_table)
-        story.append(Spacer(1, 3))
+        story.append(ht)
+        story.append(Spacer(1, 5))
 
     def _add_section_header(self, story, title):
-        """Add section header with underline"""
+        """Section header with line - matches \section{} in LaTeX"""
         story.append(Paragraph(f"<b>{title.upper()}</b>", self.styles['SectionHeader']))
         # Add horizontal line
+        from reportlab.platypus import HRFlowable
+        from reportlab.lib import colors
         story.append(HRFlowable(width="100%", thickness=0.5, color=colors.black, 
                                spaceBefore=0, spaceAfter=5))
 
     def _render_education(self, story, data):
-        """Education section matching LaTeX resumeSubheading"""
+        """
+        LaTeX format: \resumeSubheading{Institution}{Location}{Degree}{Dates}
+        Line 1: Institution (bold)  |  Location (right)
+        Line 2: Degree (italic)  |  Dates (italic, right)
+        """
         education = data.get('education', [])
         if not education:
             return
@@ -235,10 +233,13 @@ class FixedTemplateRenderer:
             perc = edu.get('percentage', '')
             dur = edu.get('duration', '')
             
-            # Line 1: Institution (bold) | Location (right)
+            if not inst:
+                continue
+            
+            # Line 1: Institution | Location
             t1 = Table([[
-                Paragraph(f"<b>{inst}</b>", self.styles['Institution']),
-                Paragraph(loc, self.styles['Institution'])
+                Paragraph(f"<b>{inst}</b>", self.styles['InstitutionName']),
+                Paragraph(loc, self.styles['InstitutionName'])
             ]], colWidths=[5*inch, 2.5*inch])
             
             t1.setStyle(TableStyle([
@@ -252,7 +253,7 @@ class FixedTemplateRenderer:
             ]))
             story.append(t1)
             
-            # Line 2: Degree (italic, bold parts) | Duration (italic, right)
+            # Line 2: Degree (italic) | Duration (italic)
             deg_text = deg
             if field:
                 deg_text += f" in {field}"
@@ -262,8 +263,8 @@ class FixedTemplateRenderer:
                 deg_text += f", <b>{perc}</b>"
             
             t2 = Table([[
-                Paragraph(f"<i>{deg_text}</i>", self.styles['Degree']),
-                Paragraph(f"<i>{dur}</i>", self.styles['Degree'])
+                Paragraph(f"<i>{deg_text}</i>", self.styles['DegreeTitle']),
+                Paragraph(f"<i>{dur}</i>", self.styles['DegreeTitle'])
             ]], colWidths=[5*inch, 2.5*inch])
             
             t2.setStyle(TableStyle([
@@ -278,7 +279,14 @@ class FixedTemplateRenderer:
             story.append(t2)
 
     def _render_projects(self, story, data):
-        """Projects section matching LaTeX format"""
+        """
+        LaTeX format:
+        \resumeSubItem{Project Name | Tech}{}
+        \resumeItemListStart
+        \item Description 1
+        \item Description 2
+        \resumeItemListEnd
+        """
         projects = data.get('projects', [])
         if not projects:
             return
@@ -290,28 +298,37 @@ class FixedTemplateRenderer:
             tech = proj.get('technologies', '')
             desc = proj.get('description', [])
             
+            if not name:
+                continue
+            
             if isinstance(tech, list):
                 tech = ', '.join(tech)
             
-            # Project header (bold name | tech)
+            # Project header (bold, no bullet)
             header = f"<b>{name}"
             if tech:
                 header += f" | {tech}"
-            header += "</b>:"
+            header += "</b>"
             
-            story.append(Paragraph(header, self.styles['SkillLabel']))
+            story.append(Paragraph(header, self.styles['ProjectHeader']))
             
-            # Description bullets
+            # Descriptions with bullets
             if isinstance(desc, str):
                 desc = [desc]
             
             for d in desc:
-                story.append(Paragraph(f"• {d}", self.styles['BulletItem']))
+                if d.strip():
+                    story.append(Paragraph(f"• {d}", self.styles['BulletItem']))
             
             story.append(Spacer(1, 2.5))
 
     def _render_research(self, story, data):
-        """Research section matching LaTeX format"""
+        """
+        LaTeX format: \resumeSubheading{Title}{Location}{Role}{Date}
+        \resumeItemListStart
+        \item Detail 1
+        \resumeItemListEnd
+        """
         research = data.get('research', [])
         if not research:
             return
@@ -325,10 +342,13 @@ class FixedTemplateRenderer:
             date = res.get('date', '')
             details = res.get('details', [])
             
-            # Line 1: Title (bold) | Location (right)
+            if not title:
+                continue
+            
+            # Line 1: Title (bold) | Location
             t1 = Table([[
-                Paragraph(f"<b>{title}</b>", self.styles['Institution']),
-                Paragraph(loc, self.styles['Institution'])
+                Paragraph(f"<b>{title}</b>", self.styles['InstitutionName']),
+                Paragraph(loc, self.styles['InstitutionName'])
             ]], colWidths=[5*inch, 2.5*inch])
             
             t1.setStyle(TableStyle([
@@ -342,10 +362,10 @@ class FixedTemplateRenderer:
             ]))
             story.append(t1)
             
-            # Line 2: Role (italic) | Date (italic, right)
+            # Line 2: Role (italic) | Date (italic)
             t2 = Table([[
-                Paragraph(f"<i>{role}</i>", self.styles['Degree']),
-                Paragraph(f"<i>{date}</i>", self.styles['Degree'])
+                Paragraph(f"<i>{role}</i>", self.styles['DegreeTitle']),
+                Paragraph(f"<i>{date}</i>", self.styles['DegreeTitle'])
             ]], colWidths=[5*inch, 2.5*inch])
             
             t2.setStyle(TableStyle([
@@ -359,17 +379,21 @@ class FixedTemplateRenderer:
             ]))
             story.append(t2)
             
-            # Details
+            # Details with bullets
             if isinstance(details, str):
                 details = [details]
             
             for d in details:
-                story.append(Paragraph(f"• {d}", self.styles['BulletItem']))
+                if d.strip():
+                    story.append(Paragraph(f"• {d}", self.styles['BulletItem']))
             
             story.append(Spacer(1, 2.5))
 
     def _render_technical_skills(self, story, data):
-        """Technical Skills matching LaTeX format"""
+        """
+        LaTeX format: \resumeSubItem{Category}{skills}
+        Renders as: • Category: skills
+        """
         skills = data.get('skills', {})
         if not skills:
             return
@@ -392,10 +416,13 @@ class FixedTemplateRenderer:
                         sk = ", ".join(sk)
                     
                     if sk.strip():
-                        story.append(Paragraph(f"<b>{label}:</b> {sk}", self.styles['BulletItem']))
+                        story.append(Paragraph(f"• <b>{label}:</b> {sk}", self.styles['BulletItem']))
 
     def _render_certifications(self, story, data):
-        """Certifications matching LaTeX format"""
+        """
+        LaTeX format: \resumeSubItem{Name}{Details}
+        Renders as: • Name: Details
+        """
         certs = data.get('certifications', [])
         if not certs:
             return
@@ -404,10 +431,20 @@ class FixedTemplateRenderer:
         
         for cert in certs:
             if isinstance(cert, str) and cert.strip():
-                story.append(Paragraph(f"<b>•</b> {cert}", self.styles['BulletItem']))
+                # Parse "Name: Details" format
+                if ':' in cert:
+                    parts = cert.split(':', 1)
+                    name = parts[0].strip()
+                    details = parts[1].strip()
+                    story.append(Paragraph(f"• <b>{name}:</b> {details}", self.styles['BulletItem']))
+                else:
+                    story.append(Paragraph(f"• {cert}", self.styles['BulletItem']))
 
     def _render_achievements(self, story, data):
-        """Achievements matching LaTeX format"""
+        """
+        LaTeX format: \item Achievement
+        Simple bullet list
+        """
         achievements = data.get('achievements', [])
         if not achievements:
             return
@@ -419,7 +456,12 @@ class FixedTemplateRenderer:
                 story.append(Paragraph(f"• {ach}", self.styles['BulletItem']))
 
     def _render_experience(self, story, data):
-        """Work Experience matching LaTeX format"""
+        """
+        LaTeX format: \resumeSubheading{Company}{Location}{Title}{Duration}
+        \resumeItemListStart
+        \item Responsibility
+        \resumeItemListEnd
+        """
         experience = data.get('experience', [])
         if not experience:
             return
@@ -433,10 +475,13 @@ class FixedTemplateRenderer:
             dur = exp.get('duration', '')
             resp = exp.get('responsibilities', [])
             
-            # Line 1: Company (bold) | Location (right)
+            if not comp:
+                continue
+            
+            # Line 1: Company (bold) | Location
             t1 = Table([[
-                Paragraph(f"<b>{comp}</b>", self.styles['Institution']),
-                Paragraph(loc, self.styles['Institution'])
+                Paragraph(f"<b>{comp}</b>", self.styles['InstitutionName']),
+                Paragraph(loc, self.styles['InstitutionName'])
             ]], colWidths=[5*inch, 2.5*inch])
             
             t1.setStyle(TableStyle([
@@ -450,10 +495,10 @@ class FixedTemplateRenderer:
             ]))
             story.append(t1)
             
-            # Line 2: Title (italic) | Duration (italic, right)
+            # Line 2: Title (italic) | Duration (italic)
             t2 = Table([[
-                Paragraph(f"<i>{title}</i>", self.styles['Degree']),
-                Paragraph(f"<i>{dur}</i>", self.styles['Degree'])
+                Paragraph(f"<i>{title}</i>", self.styles['DegreeTitle']),
+                Paragraph(f"<i>{dur}</i>", self.styles['DegreeTitle'])
             ]], colWidths=[5*inch, 2.5*inch])
             
             t2.setStyle(TableStyle([
@@ -467,7 +512,7 @@ class FixedTemplateRenderer:
             ]))
             story.append(t2)
             
-            # Responsibilities
+            # Responsibilities with bullets
             if isinstance(resp, str):
                 resp = [resp]
             

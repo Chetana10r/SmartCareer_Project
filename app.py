@@ -379,43 +379,40 @@ def scrape_jobs():
 # Resume Optimization Endpoint (Improved)
 # -----------------------------
 
+
 @app.route('/optimize_resume', methods=['POST'])
 def optimize_resume():
-    """Optimize resume based on job description with full content extraction"""
+    """Optimize resume - extract ALL content"""
     if 'resume' not in request.files:
         return jsonify({"error": "No resume uploaded"}), 400
 
     resume_file = request.files['resume']
     job_description = request.form.get('job_description', '')
     
-    # Extract resume text
     resume_text = extract_text_from_pdf(resume_file)
     
-    if not resume_text or resume_text == "Unable to extract text from PDF":
+    if not resume_text:
         return jsonify({"error": "Could not extract text from resume"}), 400
 
     try:
-        # Parse the resume to extract structured data
+        # Parse resume
         parser = ResumeParser()
         parsed_data = parser.parse_resume(resume_text)
         
-        app.logger.info(f"Parsed resume data: {parsed_data['personal_info']['name']}")
+        app.logger.info(f"Parsed: {parsed_data['personal_info']['name']}")
+        app.logger.info(f"Education: {len(parsed_data['education'])} entries")
+        app.logger.info(f"Projects: {len(parsed_data['projects'])} entries")
         
-        # Clean and analyze resume for skill matching
-        cleaned_text = clean_text(resume_text)
-        
-        # Optimize based on job description
+        # Optimize based on JD
         if job_description:
+            cleaned_text = clean_text(resume_text)
             optimization = optimize_resume_content(cleaned_text, job_description)
             summary = optimization['summary']
             app.logger.info(f"Match score: {optimization['match_score']}%")
         else:
-            summary = parsed_data.get('professional_summary', '') or (
-                "Experienced professional with demonstrated expertise in technology and innovation. "
-                "Proven track record of delivering high-impact solutions."
-            )
+            summary = "Experienced professional with strong technical background."
         
-        # Build optimized resume data using PARSED content
+        # Build resume with ALL content
         optimized_resume = {
             "personal_info": parsed_data['personal_info'],
             "professional_summary": summary,
@@ -428,22 +425,59 @@ def optimize_resume():
             "research": parsed_data['research']
         }
         
-        # Ensure static directory exists
         os.makedirs('static', exist_ok=True)
         
-        # Render PDF
         renderer = FixedTemplateRenderer()
         pdf_path = renderer.render_resume(optimized_resume)
         
-        app.logger.info(f"Resume generated successfully at {pdf_path}")
+        app.logger.info(f"Resume generated: {pdf_path}")
         
         return send_file(pdf_path, as_attachment=True, download_name="optimized_resume.pdf")
 
     except Exception as e:
-        app.logger.error(f"Error in optimize_resume: {e}")
+        app.logger.error(f"Error: {e}")
         import traceback
         traceback.print_exc()
-        return jsonify({"error": f"Failed to optimize resume: {str(e)}"}), 500
+        return jsonify({"error": str(e)}), 500
+
+
+def prioritize_content_by_jd(parsed_data, matched_skills):
+    """Prioritize and trim content to fit one page based on JD"""
+    # Limit education to top 4
+    parsed_data['education'] = parsed_data['education'][:4]
+    
+    # Limit projects to 3 most relevant
+    if len(parsed_data['projects']) > 3:
+        parsed_data['projects'] = parsed_data['projects'][:3]
+    
+    # Limit project descriptions to 3 bullets each
+    for proj in parsed_data['projects']:
+        if len(proj.get('description', [])) > 3:
+            proj['description'] = proj['description'][:3]
+    
+    # Limit certifications to 4
+    if len(parsed_data['certifications']) > 4:
+        parsed_data['certifications'] = parsed_data['certifications'][:4]
+    
+    # Limit achievements to 5
+    if len(parsed_data['achievements']) > 5:
+        parsed_data['achievements'] = parsed_data['achievements'][:5]
+    
+    # Limit research details to 3 bullets
+    for res in parsed_data['research']:
+        if len(res.get('details', [])) > 3:
+            res['details'] = res['details'][:3]
+    
+    # Limit experience to 2
+    if len(parsed_data['experience']) > 2:
+        parsed_data['experience'] = parsed_data['experience'][:2]
+    
+    # Limit experience responsibilities to 3 each
+    for exp in parsed_data['experience']:
+        if len(exp.get('responsibilities', [])) > 3:
+            exp['responsibilities'] = exp['responsibilities'][:3]
+    
+    return parsed_data
 
 
 # -----------------------------
