@@ -131,6 +131,27 @@ const ResumeOptimizer = () => {
     });
   };
 
+  // Helper function to get score color
+  const getScoreColor = (score) => {
+    if (score >= 80) return "#2ecc71"; // green
+    if (score >= 60) return "#f39c12"; // orange
+    return "#e74c3c"; // red
+  };
+
+  // Helper function to get suggestion icon
+  const getSuggestionIcon = (type) => {
+    switch (type) {
+      case "success":
+        return "✅";
+      case "warning":
+        return "⚠️";
+      case "info":
+        return "ℹ️";
+      default:
+        return "📝";
+    }
+  };
+
   // Check ATS Score
   const handleCheckATS = async () => {
     if (!resumeFile) {
@@ -395,7 +416,7 @@ const ResumeOptimizer = () => {
               </div>
             </div>
 
-            {/* ATS Score Display */}
+            {/* UPDATED ATS Score Display */}
             {atsScore && (
               <div className="card ats-score-card">
                 <div className="card-header">
@@ -403,63 +424,174 @@ const ResumeOptimizer = () => {
                   <h2 className="card-title">ATS Compatibility Score</h2>
                 </div>
                 <div className="card-body">
+                  {/* Main Score Circle */}
                   <div className="score-display">
-                    <div className="score-circle">
+                    <div
+                      className="score-circle"
+                      style={{
+                        background: `linear-gradient(135deg, ${getScoreColor(atsScore.ats_score)}, ${getScoreColor(atsScore.ats_score)}aa)`,
+                      }}
+                    >
                       <span className="score-value">{atsScore.ats_score}</span>
                       <span className="score-label">/ 100</span>
                     </div>
-                    <div className="score-breakdown">
-                      <div className="score-item">
-                        <span className="score-item-label">Keyword Match:</span>
-                        <span className="score-item-value">
-                          {atsScore.keyword_match_score}%
-                        </span>
-                      </div>
-                      <div className="score-item">
-                        <span className="score-item-label">Format Score:</span>
-                        <span className="score-item-value">
-                          {atsScore.format_score}%
-                        </span>
-                      </div>
+                    <div className="score-status">
+                      <p className="score-status-text">
+                        {atsScore.ats_score >= 80
+                          ? "✅ Excellent - High ATS Compatibility"
+                          : atsScore.ats_score >= 60
+                          ? "⚠️ Good - Some improvements needed"
+                          : "❌ Poor - Significant improvements needed"}
+                      </p>
                     </div>
                   </div>
 
-                  {atsScore.matched_skills &&
-                    atsScore.matched_skills.length > 0 && (
-                      <div className="skills-section">
-                        <h3>✅ Matched Skills:</h3>
-                        <div className="skills-tags">
-                          {atsScore.matched_skills.map((skill, idx) => (
-                            <span key={idx} className="skill-tag matched">
-                              {skill}
-                            </span>
-                          ))}
+                  {/* Score Breakdown */}
+                  {atsScore.score_breakdown && (
+                    <div className="score-breakdown-section">
+                      <h3 className="section-title">📊 Score Breakdown</h3>
+                      <div className="breakdown-grid">
+                        <div className="breakdown-item">
+                          <p className="breakdown-label">Keyword Match</p>
+                          <p className="breakdown-value" style={{ color: "#3498db" }}>
+                            {atsScore.score_breakdown.keyword_match}%
+                          </p>
+                          <p className="breakdown-weight">(40% weight)</p>
+                        </div>
+                        <div className="breakdown-item">
+                          <p className="breakdown-label">Skill Alignment</p>
+                          <p className="breakdown-value" style={{ color: "#9b59b6" }}>
+                            {atsScore.score_breakdown.skill_alignment}%
+                          </p>
+                          <p className="breakdown-weight">(25% weight)</p>
+                        </div>
+                        <div className="breakdown-item">
+                          <p className="breakdown-label">Formatting</p>
+                          <p className="breakdown-value" style={{ color: "#3498db" }}>
+                            {atsScore.score_breakdown.formatting}%
+                          </p>
+                          <p className="breakdown-weight">(20% weight)</p>
+                        </div>
+                        <div className="breakdown-item">
+                          <p className="breakdown-label">Completeness</p>
+                          <p className="breakdown-value" style={{ color: "#1abc9c" }}>
+                            {atsScore.score_breakdown.completeness}%
+                          </p>
+                          <p className="breakdown-weight">(15% weight)</p>
                         </div>
                       </div>
-                    )}
+                    </div>
+                  )}
 
-                  {atsScore.missing_keywords &&
-                    atsScore.missing_keywords.length > 0 && (
-                      <div className="skills-section">
-                        <h3>❌ Missing Keywords:</h3>
-                        <div className="skills-tags">
-                          {atsScore.missing_keywords.map((keyword, idx) => (
-                            <span key={idx} className="skill-tag missing">
-                              {keyword}
-                            </span>
-                          ))}
+                  {/* Contact Info */}
+                  {atsScore.contact_info && (
+                    <div className="contact-info-section">
+                      <h3 className="section-title">📞 Contact Information</h3>
+                      <div className="contact-info-grid">
+                        <div className="contact-item">
+                          <span>{atsScore.contact_info.email_found ? "✅" : "❌"}</span>
+                          <span>Email</span>
+                        </div>
+                        <div className="contact-item">
+                          <span>{atsScore.contact_info.phone_found ? "✅" : "❌"}</span>
+                          <span>Phone</span>
+                        </div>
+                        <div className="contact-item">
+                          <span>{atsScore.contact_info.linkedin_found ? "✅" : "❌"}</span>
+                          <span>LinkedIn</span>
                         </div>
                       </div>
-                    )}
+                    </div>
+                  )}
 
-                  {atsScore.suggestions && (
-                    <div className="suggestions-section">
-                      <h3>💡 Suggestions:</h3>
-                      <ul>
-                        {atsScore.suggestions.map((suggestion, idx) => (
-                          <li key={idx}>{suggestion}</li>
+                  {/* Matched Skills */}
+                  {atsScore.matched_skills && atsScore.matched_skills.length > 0 && (
+                    <div className="skills-section">
+                      <h3 className="section-title">✅ Matched Skills ({atsScore.matched_skills.length})</h3>
+                      <div className="skills-tags">
+                        {atsScore.matched_skills.map((skill, idx) => (
+                          <span key={idx} className="skill-tag matched">
+                            {skill}
+                          </span>
                         ))}
-                      </ul>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Missing Skills */}
+                  {atsScore.missing_skills && atsScore.missing_skills.length > 0 && (
+                    <div className="skills-section">
+                      <h3 className="section-title">⚠️ Missing Skills ({atsScore.missing_skills.length})</h3>
+                      <div className="skills-tags">
+                        {atsScore.missing_skills.map((skill, idx) => (
+                          <span key={idx} className="skill-tag missing">
+                            {skill}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Matched Keywords */}
+                  {atsScore.matched_keywords && atsScore.matched_keywords.length > 0 && (
+                    <div className="keywords-section">
+                      <h3 className="section-title">🔑 Matched Keywords ({atsScore.matched_keywords.length})</h3>
+                      <div className="keywords-tags">
+                        {atsScore.matched_keywords.map((kw, idx) => (
+                          <span key={idx} className="keyword-tag">
+                            {kw}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Missing Keywords */}
+                  {atsScore.missing_keywords && atsScore.missing_keywords.length > 0 && (
+                    <div className="keywords-section">
+                      <h3 className="section-title">📝 Missing Keywords ({atsScore.missing_keywords.length})</h3>
+                      <div className="keywords-tags">
+                        {atsScore.missing_keywords.map((kw, idx) => (
+                          <span key={idx} className="keyword-tag missing">
+                            {kw}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Statistics */}
+                  {atsScore.word_count && (
+                    <div className="statistics-section">
+                      <h3 className="section-title">📈 Resume Statistics</h3>
+                      <p className="stat-text">
+                        <strong>Word Count:</strong> {atsScore.word_count} words (Ideal: 300-900)
+                        {atsScore.word_count < 300 && " ⚠️ Too short"}
+                        {atsScore.word_count > 900 && " ⚠️ Too long"}
+                        {atsScore.word_count >= 300 && atsScore.word_count <= 900 && " ✅ Perfect"}
+                      </p>
+                      {atsScore.domain_detected && (
+                        <p className="stat-text">
+                          <strong>Domain Detected:</strong> {atsScore.domain_detected}
+                        </p>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Suggestions */}
+                  {atsScore.suggestions && Array.isArray(atsScore.suggestions) && (
+                    <div className="suggestions-section">
+                      <h3 className="section-title">💡 Suggestions for Improvement</h3>
+                      <div className="suggestions-list">
+                        {atsScore.suggestions.map((suggestion, idx) => (
+                          <div key={idx} className={`suggestion-item suggestion-${suggestion.type}`}>
+                            <span className="suggestion-icon">
+                              {getSuggestionIcon(suggestion.type)}
+                            </span>
+                            <p className="suggestion-text">{suggestion.message}</p>
+                          </div>
+                        ))}
+                      </div>
                     </div>
                   )}
                 </div>

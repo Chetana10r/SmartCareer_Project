@@ -567,57 +567,189 @@ def check_ats_score():
         if not resume_text:
             return jsonify({"error": "Could not extract text from resume"}), 400
         
-        # Analyze match
-        cleaned_text = clean_text(resume_text)
-        optimization = optimize_resume_content(cleaned_text, job_description)
+        # Clean and analyze text
+        cleaned_resume = clean_text(resume_text)
+        cleaned_jd = clean_text(job_description)
         
-        # Calculate additional scores
-        word_count = len(resume_text.split())
-        has_email = bool(re.search(r'[\w\.-]+@[\w\.-]+\.\w+', resume_text))
-        has_phone = bool(re.search(r'[\+\d][\d\-\(\)\s]{8,}', resume_text))
+        # 1. KEYWORD MATCHING SCORE (40% weight)
+        jd_keywords = set(extract_keywords_from_text(job_description, 30))
+        resume_keywords = set(extract_keywords_from_text(resume_text, 30))
+        matched_keywords = jd_keywords.intersection(resume_keywords)
         
-        # Format score
+        keyword_match_score = int((len(matched_keywords) / len(jd_keywords)) * 100) if jd_keywords else 0
+        
+        # 2. SKILL EXTRACTION & MATCHING (25% weight)
+        domain = detect_domain(cleaned_resume)
+        skill_list = IT_SKILL_LIST if domain == "IT" else NON_IT_SKILL_LIST
+        
+        resume_skills = extract_skills(cleaned_resume, skill_list)
+        jd_skills = extract_skills(cleaned_jd, skill_list)
+        
+        matched_skills = list(set(resume_skills).intersection(set(jd_skills)))
+        skill_match_score = int((len(matched_skills) / len(jd_skills)) * 100) if jd_skills else 0
+        
+        # 3. FORMATTING & STRUCTURE SCORE (20% weight)
         format_score = 100
-        if not has_email: format_score -= 20
-        if not has_phone: format_score -= 20
-        if word_count < 200: format_score -= 30
-        if word_count > 1000: format_score -= 10
         
-        # Ensure format_score doesn't go below 0
-        format_score = max(0, format_score)
+        # Check contact information
+        has_email = bool(re.search(r'[\w\.-]+@[\w\.-]+\.\w+', resume_text))
+        has_phone = bool(re.search(r'(?:\+\d{1,3}|\d{3})[.\s-]?\d{3}[.\s-]?\d{4}|\(\d{3}\)\s?\d{3}[.\s-]?\d{4}', resume_text))
+        has_linkedin = bool(re.search(r'linkedin\.com/in/[\w\-]+', resume_text, re.IGNORECASE))
         
-        # Overall ATS score
-        overall_score = int((optimization['match_score'] * 0.6) + (format_score * 0.4))
+        if not has_email:
+            format_score -= 15
+        if not has_phone:
+            format_score -= 15
+        if not has_linkedin:
+            format_score -= 10
         
-        # Better suggestions
+        # Check word count (300-900 words is ideal for ATS)
+        word_count = len(resume_text.split())
+        if word_count < 250:
+            format_score -= 20
+        elif word_count > 1500:
+            format_score -= 15
+        
+        # Check for important sections
+        sections_found = 0
+        section_keywords = ['experience', 'education', 'skill', 'project', 'certification']
+        for keyword in section_keywords:
+            if keyword.lower() in cleaned_resume:
+                sections_found += 1
+        
+        section_score = int((sections_found / len(section_keywords)) * 10)
+        format_score += section_score
+        format_score = min(100, max(0, format_score))
+        
+        # 4. LENGTH & CONTENT COMPLETENESS (15% weight)
+        completeness_score = 75  # Base score
+        
+        # Add points for having key sections
+        if re.search(r'education|degree|school|university', cleaned_resume, re.IGNORECASE):
+            completeness_score += 10
+        if re.search(r'experience|worked|job|responsibility', cleaned_resume, re.IGNORECASE):
+            completeness_score += 10
+        if re.search(r'skill|proficient|expertise|technical', cleaned_resume, re.IGNORECASE):
+            completeness_score += 5
+        
+        completeness_score = min(100, completeness_score)
+        
+        # CALCULATE OVERALL ATS SCORE
+        overall_score = int(
+            (keyword_match_score * 0.40) +
+            (skill_match_score * 0.25) +
+            (format_score * 0.20) +
+            (completeness_score * 0.15)
+        )
+        
+        # Generate intelligent suggestions
         suggestions = []
-        if optimization['match_score'] < 60:
-            suggestions.append(f"⚠️ Add more relevant keywords. Current match: {optimization['match_score']}%")
-            if optimization['missing_keywords']:
-                suggestions.append(f"📝 Consider adding: {', '.join(optimization['missing_keywords'][:5])}")
-        else:
-            suggestions.append("✅ Good keyword match!")
         
-        if not (has_email and has_phone):
-            suggestions.append("📞 Add complete contact information (email and phone)")
+        # Keyword suggestions
+        if keyword_match_score < 50:
+            missing_keywords = list(jd_keywords - resume_keywords)[:5]
+            suggestions.append({
+                "type": "warning",
+                "message": f"⚠️ Low keyword match ({keyword_match_score}%). Add: {', '.join(missing_keywords)}"
+            })
+        elif keyword_match_score >= 70:
+            suggestions.append({
+                "type": "success",
+                "message": f"✅ Excellent keyword match ({keyword_match_score}%)"
+            })
         else:
-            suggestions.append("✅ Contact information present")
+            suggestions.append({
+                "type": "info",
+                "message": f"📝 Good keyword match ({keyword_match_score}%). Could improve further."
+            })
         
-        if word_count < 400:
-            suggestions.append(f"📄 Resume is too short ({word_count} words). Aim for 400-800 words")
-        elif word_count > 800:
-            suggestions.append(f"📄 Resume is too long ({word_count} words). Consider condensing to 400-800 words")
+        # Skill suggestions
+        if skill_match_score < 50 and jd_skills:
+            missing_skills = list(set(jd_skills) - set(resume_skills))[:5]
+            suggestions.append({
+                "type": "warning",
+                "message": f"⚠️ Add more required skills: {', '.join(missing_skills)}"
+            })
+        elif skill_match_score >= 70:
+            suggestions.append({
+                "type": "success",
+                "message": f"✅ Strong skills alignment ({skill_match_score}%)"
+            })
+        
+        # Contact info suggestions
+        if not has_email or not has_phone:
+            missing = []
+            if not has_email:
+                missing.append("email")
+            if not has_phone:
+                missing.append("phone")
+            suggestions.append({
+                "type": "warning",
+                "message": f"📞 Add missing contact info: {', '.join(missing)}"
+            })
         else:
-            suggestions.append("✅ Good resume length")
+            suggestions.append({
+                "type": "success",
+                "message": "✅ Complete contact information"
+            })
+        
+        # Length suggestions
+        if word_count < 250:
+            suggestions.append({
+                "type": "warning",
+                "message": f"📄 Resume too short ({word_count} words). Aim for 300-900 words."
+            })
+        elif word_count > 1500:
+            suggestions.append({
+                "type": "warning",
+                "message": f"📄 Resume too long ({word_count} words). Condense to 300-900 words."
+            })
+        else:
+            suggestions.append({
+                "type": "success",
+                "message": f"✅ Good resume length ({word_count} words)"
+            })
+        
+        # Missing sections
+        missing_sections = []
+        if not re.search(r'education|degree', cleaned_resume, re.IGNORECASE):
+            missing_sections.append("Education")
+        if not re.search(r'experience|worked', cleaned_resume, re.IGNORECASE):
+            missing_sections.append("Experience")
+        if not re.search(r'skill', cleaned_resume, re.IGNORECASE):
+            missing_sections.append("Skills")
+        
+        if missing_sections:
+            suggestions.append({
+                "type": "warning",
+                "message": f"📋 Add missing sections: {', '.join(missing_sections)}"
+            })
+        else:
+            suggestions.append({
+                "type": "success",
+                "message": "✅ All key sections present"
+            })
         
         return jsonify({
             "ats_score": overall_score,
-            "keyword_match_score": optimization['match_score'],
-            "format_score": format_score,
-            "matched_skills": optimization['matched_skills'][:10],  # Limit to top 10
-            "missing_keywords": optimization['missing_keywords'][:10],  # Limit to top 10
+            "score_breakdown": {
+                "keyword_match": keyword_match_score,
+                "skill_alignment": skill_match_score,
+                "formatting": format_score,
+                "completeness": completeness_score
+            },
+            "matched_skills": matched_skills[:10],
+            "missing_skills": list(set(jd_skills) - set(resume_skills))[:10],
+            "matched_keywords": list(matched_keywords)[:15],
+            "missing_keywords": list(jd_keywords - resume_keywords)[:10],
+            "contact_info": {
+                "email_found": has_email,
+                "phone_found": has_phone,
+                "linkedin_found": has_linkedin
+            },
+            "word_count": word_count,
             "suggestions": suggestions,
-            "word_count": word_count
+            "domain_detected": domain
         })
     
     except Exception as e:
