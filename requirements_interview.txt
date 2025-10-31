@@ -14,6 +14,8 @@ faster-whisper==0.10.0
 TTS==0.22.0
 # Alternative: pip install pyttsx3
 
+scikit-learn==1.5.1
+
 # Audio Processing
 pydub==0.25.1
 soundfile==0.12.1

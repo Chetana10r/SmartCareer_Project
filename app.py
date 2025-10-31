@@ -1,10 +1,10 @@
-from flask import Flask, request, jsonify, render_template, send_file
+from flask import Flask, request, jsonify, render_template, send_file, make_response
 from flask_cors import CORS
 import joblib
 import re
 import string
 import spacy
-import fitz  # PyMuPDF - using this as primary PDF extractor
+import fitz  # PyMuPDF
 import io
 import requests
 import json
@@ -31,7 +31,7 @@ def extract_keywords_from_text(text, max_keywords=20):
         )
         keywords = kw_extractor.extract_keywords(text)
         return [kw[0] for kw in keywords]
-    except:
+    except Exception:
         # Fallback: simple word frequency
         words = re.findall(r'\b[a-z]{3,}\b', text.lower())
         common_words = Counter(words).most_common(max_keywords)
@@ -45,7 +45,7 @@ def optimize_resume_content(resume_text, job_description):
     # Extract keywords from job description
     job_keywords = set(extract_keywords_from_text(job_description, 30))
     
-    # Extract skills from resume
+    # Extract skills from resume (simple word extraction)
     resume_words = set(re.findall(r'\b[a-z]{3,}\b', resume_text.lower()))
     
     # Find matching skills
@@ -85,15 +85,34 @@ except ImportError:
 logging.basicConfig(level=logging.INFO)
 
 app = Flask(__name__)
-CORS(app)
+
+# Fix CORS to handle OPTIONS requests
+CORS(app, resources={
+    r"/*": {
+        "origins": "*",
+        "methods": ["GET", "POST", "OPTIONS"],
+        "allow_headers": ["Content-Type"]
+    }
+})
+
+# Add OPTIONS handler
+@app.before_request
+def handle_preflight():
+    if request.method == "OPTIONS":
+        response = make_response()
+        response.headers.add("Access-Control-Allow-Origin", "*")
+        response.headers.add("Access-Control-Allow-Headers", "Content-Type")
+        response.headers.add("Access-Control-Allow-Methods", "GET,POST,OPTIONS")
+        return response
 
 # Configure upload folders
 app.config['UPLOAD_FOLDER'] = 'static/audio'
 os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 
-# Tesseract OCR path - make sure this is installed
+# Tesseract OCR path - make sure this is installed if you want OCR fallback
 try:
     import pytesseract
+    # adjust the tesseract_cmd path if needed on your system
     pytesseract.pytesseract.tesseract_cmd = r"C:\Program Files\Tesseract-OCR\tesseract.exe"
     OCR_AVAILABLE = True
 except ImportError:
@@ -207,8 +226,6 @@ def extract_text_from_pdf(file):
 
     return text.strip() if text else "Unable to extract text from PDF"
 
-
-
 def generate_fallback_response(prompt):
     """Generate basic response without API - improved version"""
     # Extract skills from prompt
@@ -232,12 +249,11 @@ def generate_fallback_response(prompt):
     ]
     
     # Select summary based on skills length
-    summary_idx = len(skills_text) % len(summaries)
+    summary_idx = len(skills_text) % len(summaries) if summaries else 0
     
     return [{
         "summary_text": summaries[summary_idx]
     }]
-
 
 # Register interview blueprint
 app.register_blueprint(interview_bp)
@@ -297,8 +313,8 @@ def proceed_prediction():
         if domain == "IT":
             vec = it_tfidf.transform([cleaned])
             pred = it_skill_model.predict(vec)
-            skills = it_mlb.inverse_transform(pred)[0]
-            role = it_role_model.predict(it_tfidf.transform([" ".join(skills)]))[0]
+            skills = it_mlb.inverse_transform(pred)[0] if hasattr(it_mlb, 'inverse_transform') else []
+            role = it_role_model.predict(it_tfidf.transform([" ".join(skills)]))[0] if skills else it_role_model.predict(it_tfidf.transform([cleaned]))[0]
             resume_skills = extract_skills(cleaned, IT_SKILL_LIST)
             missing = get_missing_skills(resume_skills, IT_SKILL_LIST)
             x_vec = it_coursecert_tfidf.transform([" ".join(missing) if missing else "general"])
@@ -307,8 +323,8 @@ def proceed_prediction():
         else:
             vec = nonit_tfidf.transform([cleaned])
             pred = nonit_skill_model.predict(vec)
-            skills = nonit_mlb.inverse_transform(pred)[0]
-            role = nonit_role_model.predict(nonit_tfidf.transform([" ".join(skills)]))[0]
+            skills = nonit_mlb.inverse_transform(pred)[0] if hasattr(nonit_mlb, 'inverse_transform') else []
+            role = nonit_role_model.predict(nonit_tfidf.transform([" ".join(skills)]))[0] if skills else nonit_role_model.predict(nonit_tfidf.transform([cleaned]))[0]
             resume_skills = extract_skills(cleaned, NON_IT_SKILL_LIST)
             missing = get_missing_skills(resume_skills, NON_IT_SKILL_LIST)
             x_vec = nonit_coursecert_tfidf.transform([" ".join(missing) if missing else "general"])
@@ -336,7 +352,7 @@ def proceed_prediction():
 @app.route("/scrape-jobs", methods=["POST"])
 def scrape_jobs():
     """Scrape jobs from Adzuna API"""
-    data = request.get_json()
+    data = request.get_json() or {}
     job_role = data.get('job_role', '').strip()
     location = data.get('location', '').strip()
     salary_min = data.get('salary_min', '').strip()
@@ -386,8 +402,6 @@ def scrape_jobs():
 # -----------------------------
 # Resume Optimization Endpoint (Improved)
 # -----------------------------
-
-
 @app.route('/optimize_resume', methods=['POST'])
 def optimize_resume():
     """Optimize resume - extract ALL content"""
@@ -396,21 +410,26 @@ def optimize_resume():
 
     resume_file = request.files['resume']
     job_description = request.form.get('job_description', '')
-    
+
     resume_text = extract_text_from_pdf(resume_file)
-    
-    if not resume_text:
+
+    if not resume_text or resume_text == "Unable to extract text from PDF":
         return jsonify({"error": "Could not extract text from resume"}), 400
 
     try:
         # Parse resume
         parser = ResumeParser()
         parsed_data = parser.parse_resume(resume_text)
-        
-        app.logger.info(f"Parsed: {parsed_data['personal_info']['name']}")
-        app.logger.info(f"Education: {len(parsed_data['education'])} entries")
-        app.logger.info(f"Projects: {len(parsed_data['projects'])} entries")
-        
+
+        # Safeguard logs in case keys are missing
+        name = parsed_data.get('personal_info', {}).get('name', 'Unknown')
+        education_count = len(parsed_data.get('education', []))
+        projects_count = len(parsed_data.get('projects', []))
+
+        app.logger.info(f"Parsed: {name}")
+        app.logger.info(f"Education: {education_count} entries")
+        app.logger.info(f"Projects: {projects_count} entries")
+
         # Optimize based on JD
         if job_description:
             cleaned_text = clean_text(resume_text)
@@ -419,27 +438,27 @@ def optimize_resume():
             app.logger.info(f"Match score: {optimization['match_score']}%")
         else:
             summary = "Experienced professional with strong technical background."
-        
-        # Build resume with ALL content
+
+        # Build resume with ALL content (ensure keys exist)
         optimized_resume = {
-            "personal_info": parsed_data['personal_info'],
+            "personal_info": parsed_data.get('personal_info', {}),
             "professional_summary": summary,
-            "education": parsed_data['education'],
-            "experience": parsed_data['experience'],
-            "projects": parsed_data['projects'],
-            "skills": parsed_data['skills'],
-            "certifications": parsed_data['certifications'],
-            "achievements": parsed_data['achievements'],
-            "research": parsed_data['research']
+            "education": parsed_data.get('education', []),
+            "experience": parsed_data.get('experience', []),
+            "projects": parsed_data.get('projects', []),
+            "skills": parsed_data.get('skills', []),
+            "certifications": parsed_data.get('certifications', []),
+            "achievements": parsed_data.get('achievements', []),
+            "research": parsed_data.get('research', [])
         }
-        
+
         os.makedirs('static', exist_ok=True)
-        
+
         renderer = FixedTemplateRenderer()
         pdf_path = renderer.render_resume(optimized_resume)
-        
+
         app.logger.info(f"Resume generated: {pdf_path}")
-        
+
         return send_file(pdf_path, as_attachment=True, download_name="optimized_resume.pdf")
 
     except Exception as e:
@@ -448,45 +467,43 @@ def optimize_resume():
         traceback.print_exc()
         return jsonify({"error": str(e)}), 500
 
-
 def prioritize_content_by_jd(parsed_data, matched_skills):
     """Prioritize and trim content to fit one page based on JD"""
     # Limit education to top 4
-    parsed_data['education'] = parsed_data['education'][:4]
+    parsed_data['education'] = parsed_data.get('education', [])[:4]
     
     # Limit projects to 3 most relevant
-    if len(parsed_data['projects']) > 3:
+    if len(parsed_data.get('projects', [])) > 3:
         parsed_data['projects'] = parsed_data['projects'][:3]
     
     # Limit project descriptions to 3 bullets each
-    for proj in parsed_data['projects']:
+    for proj in parsed_data.get('projects', []):
         if len(proj.get('description', [])) > 3:
             proj['description'] = proj['description'][:3]
     
     # Limit certifications to 4
-    if len(parsed_data['certifications']) > 4:
+    if len(parsed_data.get('certifications', [])) > 4:
         parsed_data['certifications'] = parsed_data['certifications'][:4]
     
     # Limit achievements to 5
-    if len(parsed_data['achievements']) > 5:
+    if len(parsed_data.get('achievements', [])) > 5:
         parsed_data['achievements'] = parsed_data['achievements'][:5]
     
     # Limit research details to 3 bullets
-    for res in parsed_data['research']:
+    for res in parsed_data.get('research', []):
         if len(res.get('details', [])) > 3:
             res['details'] = res['details'][:3]
     
     # Limit experience to 2
-    if len(parsed_data['experience']) > 2:
+    if len(parsed_data.get('experience', [])) > 2:
         parsed_data['experience'] = parsed_data['experience'][:2]
     
     # Limit experience responsibilities to 3 each
-    for exp in parsed_data['experience']:
+    for exp in parsed_data.get('experience', []):
         if len(exp.get('responsibilities', [])) > 3:
             exp['responsibilities'] = exp['responsibilities'][:3]
     
     return parsed_data
-
 
 # -----------------------------
 # ADD these NEW routes:
@@ -572,7 +589,7 @@ def check_ats_score():
         # Extract resume text
         resume_text = extract_text_from_pdf(resume_file)
         
-        if not resume_text:
+        if not resume_text or resume_text == "Unable to extract text from PDF":
             return jsonify({"error": "Could not extract text from resume"}), 400
         
         # Clean and analyze text
