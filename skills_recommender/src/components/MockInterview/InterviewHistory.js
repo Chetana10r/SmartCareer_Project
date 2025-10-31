@@ -7,8 +7,8 @@ function InterviewHistory() {
   const navigate = useNavigate();
   const [interviews, setInterviews] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [filter, setFilter] = useState('all'); // all, technical, hr, mixed
-  const [sortBy, setSortBy] = useState('date'); // date, score
+  const [filter, setFilter] = useState('all');
+  const [sortBy, setSortBy] = useState('date');
 
   useEffect(() => {
     fetchHistory();
@@ -19,14 +19,14 @@ function InterviewHistory() {
       const response = await fetch('http://127.0.0.1:5000/get_interview_history', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ user_id: 'user123' }) // Replace with actual user ID
+        body: JSON.stringify({ user_id: 'user123' })
       });
 
       const data = await response.json();
       setInterviews(data.interviews || []);
     } catch (error) {
       console.error('Error fetching history:', error);
-      // Mock data for development
+      // Mock data for demo
       setInterviews([
         {
           session_id: '1',
@@ -103,7 +103,7 @@ function InterviewHistory() {
       return b.overall_score - a.overall_score;
     });
 
-  // Calculate statistics
+  // Statistics
   const stats = {
     total: interviews.length,
     avgScore: interviews.length > 0 
@@ -192,13 +192,17 @@ function InterviewHistory() {
                 <CartesianGrid strokeDasharray="3 3" />
                 <XAxis dataKey="date" />
                 <YAxis domain={[0, 10]} />
-                <Tooltip />
+                <Tooltip 
+                  contentStyle={{ background: '#fff', border: '1px solid #ccc' }}
+                  formatter={(value) => value.toFixed(1)}
+                />
                 <Line 
                   type="monotone" 
                   dataKey="score" 
                   stroke="#42e695" 
                   strokeWidth={3}
                   dot={{ r: 6, fill: '#42e695' }}
+                  activeDot={{ r: 8 }}
                 />
               </LineChart>
             </ResponsiveContainer>

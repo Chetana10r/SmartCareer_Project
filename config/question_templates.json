@@ -1,0 +1,118 @@
+{
+  "technical": {
+    "easy": [
+      "What is {concept}? Can you explain it in simple terms?",
+      "What are the main differences between {concept1} and {concept2}?",
+      "How would you explain {concept} to a non-technical person?",
+      "What are the basic principles of {concept}?",
+      "Can you describe a simple use case for {concept}?",
+      "What is the purpose of {concept} in software development?",
+      "How does {concept} work at a high level?",
+      "What are some common applications of {concept}?"
+    ],
+    "medium": [
+      "How would you implement {concept} in a real-world project?",
+      "What are the advantages and disadvantages of using {concept}?",
+      "Can you explain the internal working of {concept}?",
+      "How does {concept} improve performance or efficiency?",
+      "What best practices should be followed when using {concept}?",
+      "Compare {concept1} and {concept2} in terms of use cases.",
+      "What are some common pitfalls when working with {concept}?",
+      "How would you debug an issue related to {concept}?",
+      "Describe a scenario where {concept} would be the best choice.",
+      "What are the trade-offs of implementing {concept}?"
+    ],
+    "hard": [
+      "How would you optimize {concept} for large-scale systems?",
+      "Can you compare {concept1} and {concept2} in terms of scalability and performance?",
+      "What are the potential bottlenecks when implementing {concept}?",
+      "How would you debug a performance issue related to {concept}?",
+      "Design a system that uses {concept} to solve {problem}.",
+      "How does {concept} handle concurrency and race conditions?",
+      "What advanced techniques can be applied to improve {concept}?",
+      "Explain the complexity analysis of {concept} and how to optimize it.",
+      "How would you implement {concept} in a distributed system?",
+      "What are the architectural considerations for {concept} at scale?"
+    ]
+  },
+  "hr": {
+    "easy": [
+      "Tell me about yourself and your background.",
+      "Why are you interested in this role?",
+      "What are your key strengths?",
+      "How do you handle stress and pressure?",
+      "What motivates you in your work?",
+      "Where do you see yourself in 5 years?",
+      "Why should we hire you?",
+      "What are your career goals?",
+      "How do you stay updated with industry trends?",
+      "What makes you a good fit for this company?"
+    ],
+    "medium": [
+      "Describe a challenging situation you faced at work and how you handled it.",
+      "Tell me about a time when you had to work with a difficult team member.",
+      "How do you prioritize tasks when you have multiple deadlines?",
+      "Describe a project where you took initiative.",
+      "How do you handle constructive criticism?",
+      "Tell me about a time you had to learn something new quickly.",
+      "Describe a situation where you improved a process.",
+      "How do you handle conflicts in a team?",
+      "Tell me about a time when you exceeded expectations.",
+      "Describe your approach to problem-solving."
+    ],
+    "hard": [
+      "Tell me about a time when you failed and what you learned from it.",
+      "Describe a situation where you had to make a difficult decision with limited information.",
+      "How have you handled a situation where your team disagreed with your approach?",
+      "Tell me about a time when you had to adapt to significant changes at work.",
+      "Describe how you've handled conflicting priorities from multiple stakeholders.",
+      "Tell me about a time you had to influence others without authority.",
+      "Describe a situation where you had to give difficult feedback.",
+      "How have you handled a project that was failing?",
+      "Tell me about a time you had to work under tight deadlines with limited resources.",
+      "Describe a situation where you had to balance technical excellence with business needs."
+    ]
+  },
+  "role_specific": {
+    "data_scientist": [
+      "Explain the difference between supervised and unsupervised learning.",
+      "How do you handle imbalanced datasets?",
+      "What is overfitting and how do you prevent it?",
+      "Describe your approach to feature engineering.",
+      "How do you evaluate the performance of a machine learning model?",
+      "Explain cross-validation and its importance.",
+      "What is regularization and when would you use it?",
+      "How do you handle missing data in a dataset?"
+    ],
+    "software_engineer": [
+      "Explain the SOLID principles of object-oriented programming.",
+      "What are design patterns and can you give examples?",
+      "How do you ensure code quality and maintainability?",
+      "Describe your approach to debugging complex issues.",
+      "What is the difference between REST and GraphQL?",
+      "How do you handle database optimization?",
+      "Explain the concept of microservices architecture.",
+      "What is CI/CD and why is it important?"
+    ],
+    "frontend_developer": [
+      "Explain the Virtual DOM in React.",
+      "What are React hooks and how do they work?",
+      "How do you optimize web application performance?",
+      "Describe your approach to responsive design.",
+      "What is state management and when do you need it?",
+      "How do you ensure web accessibility?",
+      "Explain the difference between CSS Grid and Flexbox.",
+      "What are the best practices for API integration in frontend?"
+    ],
+    "backend_developer": [
+      "How do you design RESTful APIs?",
+      "Explain database indexing and its impact on performance.",
+      "What is caching and when would you use it?",
+      "How do you handle authentication and authorization?",
+      "Describe your approach to API versioning.",
+      "What are the differences between SQL and NoSQL databases?",
+      "How do you ensure API security?",
+      "Explain load balancing and its importance."
+    ]
+  }
+}

@@ -12,6 +12,7 @@ import os
 from pdf2image import convert_from_bytes
 from models.fixed_template_renderer import FixedTemplateRenderer
 from models.resume_parser import ResumeParser
+from interview_engine import interview_bp
 import logging
 import yake
 from collections import Counter
@@ -86,6 +87,9 @@ logging.basicConfig(level=logging.INFO)
 app = Flask(__name__)
 CORS(app)
 
+# Configure upload folders
+app.config['UPLOAD_FOLDER'] = 'static/audio'
+os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 
 # Tesseract OCR path - make sure this is installed
 try:
@@ -233,6 +237,10 @@ def generate_fallback_response(prompt):
     return [{
         "summary_text": summaries[summary_idx]
     }]
+
+
+# Register interview blueprint
+app.register_blueprint(interview_bp)
 
 # -------------------- Routes --------------------
 
@@ -761,7 +769,11 @@ def check_ats_score():
 # Health check endpoint
 @app.route('/health')
 def health():
-    return jsonify({"status": "healthy", "ocr_available": OCR_AVAILABLE})
+    return jsonify({
+        "status": "healthy", 
+        "ocr_available": OCR_AVAILABLE,
+        "interview_system": "active"
+    })
 
 # -----------------------------
 # Run App
