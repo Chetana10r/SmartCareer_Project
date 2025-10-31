@@ -16,6 +16,13 @@ from interview_engine import interview_bp
 import logging
 import yake
 from collections import Counter
+from database.db_config import Database
+import random
+from datetime import datetime
+
+# Initialize database
+db = Database()
+db.connect()
 
 # -----------------------------
 # Keyword Extraction & Matching
@@ -782,6 +789,243 @@ def check_ats_score():
         import traceback
         traceback.print_exc()
         return jsonify({"error": str(e)}), 500
+    
+
+# ============== MOCK TEST ROUTES ==============
+
+@app.route('/api/get_subjects', methods=['GET'])
+def get_subjects():
+    """Get list of available subjects and difficulty levels"""
+    try:
+        subjects_query = "SELECT DISTINCT subject FROM questions"
+        difficulties_query = "SELECT DISTINCT difficulty FROM questions"
+
+        subjects = db.fetch_all(subjects_query)
+        difficulties = db.fetch_all(difficulties_query)
+
+        return jsonify({
+            "subjects": [s['subject'] for s in subjects],
+            "difficulties": [d['difficulty'] for d in difficulties]
+        })
+    except Exception as e:
+        app.logger.error(f"Error fetching subjects/difficulties: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route('/api/get_questions', methods=['POST'])
+def get_questions():
+    """Get 10 random questions for selected subject"""
+    try:
+        data = request.get_json()
+        subject = data.get('subject')
+        difficulty = data.get('difficulty', None)  # Optional
+        
+        if not subject:
+            return jsonify({"error": "Subject is required"}), 400
+        
+        # Build query
+        if difficulty:
+            query = """
+                SELECT id, subject, question_text, option_a, option_b, 
+                       option_c, option_d, difficulty
+                FROM questions 
+                WHERE subject = %s AND difficulty = %s
+                ORDER BY RAND()
+                LIMIT 10
+            """
+            params = (subject, difficulty)
+        else:
+            query = """
+                SELECT id, subject, question_text, option_a, option_b, 
+                       option_c, option_d, difficulty
+                FROM questions 
+                WHERE subject = %s
+                ORDER BY RAND()
+                LIMIT 10
+            """
+            params = (subject,)
+        
+        questions = db.fetch_all(query, params)
+        
+        if not questions:
+            return jsonify({"error": "No questions found for this subject"}), 404
+        
+        # Format questions (hide correct answer)
+        formatted_questions = []
+        for q in questions:
+            formatted_questions.append({
+                "id": q['id'],
+                "subject": q['subject'],
+                "question": q['question_text'],
+                "options": {
+                    "A": q['option_a'],
+                    "B": q['option_b'],
+                    "C": q['option_c'],
+                    "D": q['option_d']
+                },
+                "difficulty": q['difficulty']
+            })
+        
+        return jsonify({
+            "questions": formatted_questions,
+            "total": len(formatted_questions),
+            "time_limit": 600  # 10 minutes in seconds
+        })
+    
+    except Exception as e:
+        app.logger.error(f"Error getting questions: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/submit_test', methods=['POST'])
+def submit_test():
+    """Submit test and get results"""
+    try:
+        data = request.get_json()
+        user_id = data.get('user_id', 'guest')
+        subject = data.get('subject')
+        answers = data.get('answers', {})  # {question_id: selected_option}
+        time_taken = data.get('time_taken', 0)
+        
+        if not subject or not answers:
+            return jsonify({"error": "Subject and answers are required"}), 400
+        
+        # Get question IDs
+        question_ids = list(answers.keys())
+        placeholders = ','.join(['%s'] * len(question_ids))
+        
+        # Fetch correct answers
+        query = f"""
+            SELECT id, correct_option, explanation, question_text,
+                   option_a, option_b, option_c, option_d
+            FROM questions 
+            WHERE id IN ({placeholders})
+        """
+        correct_data = db.fetch_all(query, tuple(question_ids))
+        
+        # Calculate score
+        score = 0
+        results = []
+        
+        for q in correct_data:
+            q_id = str(q['id'])
+            user_answer = answers.get(q_id, '')
+            correct_answer = q['correct_option']
+            is_correct = user_answer.upper() == correct_answer.upper()
+            
+            if is_correct:
+                score += 1
+            
+            results.append({
+                "question_id": q['id'],
+                "question": q['question_text'],
+                "options": {
+                    "A": q['option_a'],
+                    "B": q['option_b'],
+                    "C": q['option_c'],
+                    "D": q['option_d']
+                },
+                "user_answer": user_answer,
+                "correct_answer": correct_answer,
+                "is_correct": is_correct,
+                "explanation": q['explanation']
+            })
+        
+        total_questions = len(correct_data)
+        percentage = (score / total_questions * 100) if total_questions > 0 else 0
+        
+        # Store test attempt
+        try:
+            insert_query = """
+                INSERT INTO test_attempts 
+                (user_id, subject, score, total_questions, time_taken, answers, timestamp)
+                VALUES (%s, %s, %s, %s, %s, %s, %s)
+            """
+            db.execute_query(insert_query, (
+                user_id,
+                subject,
+                score,
+                total_questions,
+                time_taken,
+                json.dumps(results),
+                datetime.now()
+            ))
+        except Exception as e:
+            app.logger.warning(f"Could not store test attempt: {e}")
+        
+        return jsonify({
+            "score": score,
+            "total": total_questions,
+            "percentage": round(percentage, 2),
+            "results": results,
+            "time_taken": time_taken,
+            "passed": percentage >= 60  # 60% passing criteria
+        })
+    
+    except Exception as e:
+        app.logger.error(f"Error submitting test: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/test_history/<user_id>', methods=['GET'])
+def get_test_history(user_id):
+    """Get user's test history"""
+    try:
+        query = """
+            SELECT attempt_id, subject, score, total_questions, 
+                   time_taken, timestamp
+            FROM test_attempts
+            WHERE user_id = %s
+            ORDER BY timestamp DESC
+            LIMIT 20
+        """
+        history = db.fetch_all(query, (user_id,))
+        
+        # Calculate stats
+        if history:
+            total_tests = len(history)
+            avg_score = sum(h['score']/h['total_questions'] for h in history) / total_tests * 100
+            subjects = list(set(h['subject'] for h in history))
+        else:
+            total_tests = 0
+            avg_score = 0
+            subjects = []
+        
+        return jsonify({
+            "history": history,
+            "stats": {
+                "total_tests": total_tests,
+                "average_score": round(avg_score, 2),
+                "subjects_attempted": subjects
+            }
+        })
+    
+    except Exception as e:
+        app.logger.error(f"Error fetching history: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/test_result/<int:attempt_id>', methods=['GET'])
+def get_test_result(attempt_id):
+    """Get detailed result of a specific test attempt"""
+    try:
+        query = """
+            SELECT * FROM test_attempts
+            WHERE attempt_id = %s
+        """
+        result = db.fetch_one(query, (attempt_id,))
+        
+        if not result:
+            return jsonify({"error": "Test attempt not found"}), 404
+        
+        # Parse JSON answers
+        result['answers'] = json.loads(result['answers']) if result['answers'] else []
+        
+        return jsonify(result)
+    
+    except Exception as e:
+        app.logger.error(f"Error fetching result: {e}")
+        return jsonify({"error": str(e)}), 500
+
     
 # Health check endpoint
 @app.route('/health')

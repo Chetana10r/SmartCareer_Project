@@ -1,4 +1,4 @@
-// App.js
+// App.js - UPDATED VERSION
 import React from "react";
 import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
 
@@ -18,6 +18,12 @@ import InterviewSession from "./components/MockInterview/InterviewSession";
 import InterviewFeedback from "./components/MockInterview/InterviewFeedback";
 import InterviewHistory from "./components/MockInterview/InterviewHistory";
 
+// NEW: Mock Test Components
+import SubjectSelection from "./components/MockTest/SubjectSelection";
+import MockTestQuiz from "./components/MockTest/MockTestQuiz";
+import ResultPage from "./components/MockTest/ResultPage";
+import TestHistory from "./components/MockTest/TestHistory";
+
 import "./App.css";
 
 function App() {
@@ -36,10 +42,18 @@ function App() {
             <Route path="/contact" element={<Contact />} />
             <Route path="/login" element={<Login />} />
             <Route path="/resume-optimizer" element={<ResumeOptimizer />} />
+            
+            {/* Interview Routes */}
             <Route path="/mock-interview" element={<InterviewSetup />} />
             <Route path="/interview-session" element={<InterviewSession />} />
             <Route path="/interview-feedback" element={<InterviewFeedback />} />
             <Route path="/interview-history" element={<InterviewHistory />} />
+            
+            {/* NEW: Mock Test Routes */}
+            <Route path="/mock-test" element={<SubjectSelection />} />
+            <Route path="/mock-test/quiz" element={<MockTestQuiz />} />
+            <Route path="/mock-test/result" element={<ResultPage />} />
+            <Route path="/mock-test/history" element={<TestHistory />} />
           </Routes>
         </div>
         <Footer />

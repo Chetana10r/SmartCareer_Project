@@ -5,30 +5,21 @@ import "./Navbar.css";
 function Navbar() {
   return (
     <nav className="navbar">
-      <div className="navbar-brand">SmartCareer</div>
+      <div className="navbar-container">
+        <div className="navbar-brand">SmartCareer</div>
 
-      <ul className="navbar-links">
-        <li>
-          <Link to="/">Home</Link>
-        </li>
-        <li>
-          <Link to="/about">About</Link>
-        </li>
-        <li>
-          <Link to="/testimonials">Testimonials</Link>
-        </li>
-        <li>
-          <Link to="/contact">Contact</Link>
-        </li>
-        <li>
-          <Link to="/mock-interview">Mock Interview</Link>
-        </li>
-      </ul>
+        <ul className="navbar-links">
+          <li><Link to="/">Home</Link></li>
+          <li><Link to="/about">About</Link></li>
+          <li><Link to="/testimonials">Testimonials</Link></li>
+          <li><Link to="/contact">Contact</Link></li>
+          <li><Link to="/mock-interview">Mock Interview</Link></li>
+          <li><Link to="/mock-test">Mock Test</Link></li>
+        </ul>
 
-      <div className="navbar-login">
-        <Link to="/login" className="login-btn">
-          Login
-        </Link>
+        <div className="navbar-login">
+          <Link to="/login" className="login-btn">Login</Link>
+        </div>
       </div>
     </nav>
   );
