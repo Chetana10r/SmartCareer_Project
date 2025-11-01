@@ -1,22 +1,281 @@
+/* Modern Single Line Footer - Clean & Professional */
+
 .footer {
-  background-color: #ffffff; /* White background */
-  color: #000000; /* Black text */
+  background: linear-gradient(135deg, #1a1a2e 0%, #0a0a0a 100%);
+  color: rgba(255, 255, 255, 0.8);
   text-align: center;
-  padding: 0.6rem 0;
-  font-size: 0.5rem;
-  position: fixed;
-  bottom: 0;
-  left: 0;
+  padding: 1rem 2rem;
+  font-size: 0.875rem;
+  position: relative;
   width: 100%;
   z-index: 200;
-  box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.1);
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
   font-family: "Poppins", sans-serif;
-  letter-spacing: 0.5px;
+  margin-top: auto; /* Push footer to bottom */
+}
+
+/* Single line content wrapper */
+.footer-content {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  max-width: 1400px;
+  margin: 0 auto;
+  flex-wrap: wrap;
+  gap: 1rem;
+}
+
+/* Copyright text */
+.footer-copyright {
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 0.875rem;
+}
+
+/* Links section */
+.footer-links {
+  display: flex;
+  gap: 2rem;
+  align-items: center;
+}
+
+.footer-links a {
+  color: rgba(255, 255, 255, 0.7);
+  text-decoration: none;
+  font-size: 0.875rem;
+  transition: all 0.3s ease;
+  position: relative;
+}
+
+.footer-links a::after {
+  content: '';
+  position: absolute;
+  bottom: -2px;
+  left: 0;
+  width: 0;
+  height: 1px;
+  background: #00e0ff;
+  transition: width 0.3s ease;
+}
+
+.footer-links a:hover {
+  color: #00e0ff;
+}
+
+.footer-links a:hover::after {
+  width: 100%;
+}
+
+/* Social icons */
+.footer-social {
+  display: flex;
+  gap: 1rem;
+  align-items: center;
+}
+
+.footer-social a {
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 1.2rem;
   transition: all 0.3s ease;
 }
 
-/* Add a subtle hover glow effect */
-.footer:hover {
-  background-color: #f9f9f9;
-  box-shadow: 0 -3px 12px rgba(0, 0, 0, 0.15);
+.footer-social a:hover {
+  color: #00e0ff;
+  transform: translateY(-2px);
+}
+
+/* Divider between sections */
+.footer-divider {
+  width: 1px;
+  height: 20px;
+  background: rgba(255, 255, 255, 0.2);
+}
+
+/* Responsive design */
+@media (max-width: 768px) {
+  .footer {
+    padding: 1rem;
+  }
+
+  .footer-content {
+    flex-direction: column;
+    text-align: center;
+    gap: 0.8rem;
+  }
+
+  .footer-links {
+    gap: 1rem;
+  }
+
+  .footer-divider {
+    display: none;
+  }
+}
+
+/* ========================================
+   ALTERNATIVE STYLE 1: Ultra Minimal
+   ======================================== */
+
+.footer-minimal {
+  background: #0a0a0a;
+  color: rgba(255, 255, 255, 0.6);
+  text-align: center;
+  padding: 1.2rem 2rem;
+  font-size: 0.85rem;
+  position: relative;
+  width: 100%;
+  border-top: 1px solid rgba(255, 255, 255, 0.05);
+  font-family: "Poppins", sans-serif;
+}
+
+.footer-minimal-content {
+  max-width: 1400px;
+  margin: 0 auto;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 2rem;
+}
+
+.footer-minimal span {
+  color: #00e0ff;
+  font-weight: 600;
+}
+
+/* ========================================
+   ALTERNATIVE STYLE 2: With Accent Line
+   ======================================== */
+
+.footer-accent {
+  background: #0a0a0a;
+  color: rgba(255, 255, 255, 0.7);
+  text-align: center;
+  padding: 1.2rem 2rem;
+  font-size: 0.875rem;
+  position: relative;
+  width: 100%;
+  font-family: "Poppins", sans-serif;
+}
+
+.footer-accent::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, #00e0ff, #00bfa5, transparent);
+}
+
+.footer-accent-content {
+  max-width: 1400px;
+  margin: 0 auto;
+}
+
+/* ========================================
+   ALTERNATIVE STYLE 3: Compact with Icons
+   ======================================== */
+
+.footer-compact {
+  background: #1a1a2e;
+  color: rgba(255, 255, 255, 0.7);
+  padding: 1rem 2rem;
+  font-size: 0.875rem;
+  position: relative;
+  width: 100%;
+  font-family: "Poppins", sans-serif;
+}
+
+.footer-compact-content {
+  max-width: 1400px;
+  margin: 0 auto;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.footer-compact-left {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.footer-compact-brand {
+  color: #00e0ff;
+  font-weight: 700;
+  font-size: 1rem;
+}
+
+.footer-compact-right {
+  display: flex;
+  gap: 1.5rem;
+  align-items: center;
+}
+
+@media (max-width: 768px) {
+  .footer-compact-content {
+    flex-direction: column;
+    gap: 0.8rem;
+    text-align: center;
+  }
+}
+
+/* ========================================
+   RECOMMENDED: Professional Single Line
+   ======================================== */
+
+.footer-pro {
+  background: #0a0a0a;
+  color: rgba(255, 255, 255, 0.6);
+  padding: 1rem 2rem;
+  font-size: 0.875rem;
+  position: relative;
+  width: 100%;
+  border-top: 1px solid rgba(0, 224, 255, 0.1);
+  font-family: "Poppins", sans-serif;
+}
+
+.footer-pro-content {
+  max-width: 1400px;
+  margin: 0 auto;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.footer-pro-left {
+  color: rgba(255, 255, 255, 0.6);
+}
+
+.footer-pro-left strong {
+  color: #00e0ff;
+  font-weight: 600;
+}
+
+.footer-pro-right {
+  display: flex;
+  gap: 2rem;
+  align-items: center;
+}
+
+.footer-pro-right a {
+  color: rgba(255, 255, 255, 0.6);
+  text-decoration: none;
+  font-size: 0.875rem;
+  transition: color 0.3s ease;
+}
+
+.footer-pro-right a:hover {
+  color: #00e0ff;
+}
+
+@media (max-width: 768px) {
+  .footer-pro-content {
+    flex-direction: column;
+    gap: 0.5rem;
+    text-align: center;
+  }
+
+  .footer-pro-right {
+    gap: 1rem;
+  }
 }

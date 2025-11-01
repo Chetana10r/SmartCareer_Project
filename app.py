@@ -790,6 +790,7 @@ def check_ats_score():
         traceback.print_exc()
         return jsonify({"error": str(e)}), 500
     
+    
 
 # ============== MOCK TEST ROUTES ==============
 
