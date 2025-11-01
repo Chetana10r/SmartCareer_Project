@@ -10,155 +10,151 @@ import requests
 import json
 import os
 from pdf2image import convert_from_bytes
-from models.fixed_template_renderer import FixedTemplateRenderer
-from models.resume_parser import ResumeParser
-from interview_engine import interview_bp
 import logging
 import yake
 from collections import Counter
-from database.db_config import Database
-import random
 from datetime import datetime
+from pymongo import MongoClient
+from bson import ObjectId
+from dotenv import load_dotenv
 
-# Initialize database
-db = Database()
-db.connect()
+# Load environment variables
+load_dotenv()
 
-# -----------------------------
-# Keyword Extraction & Matching
-# -----------------------------
-def extract_keywords_from_text(text, max_keywords=20):
-    """Extract important keywords using YAKE"""
-    try:
-        kw_extractor = yake.KeywordExtractor(
-            lan="en",
-            n=2,  # bigrams
-            dedupLim=0.9,
-            top=max_keywords
-        )
-        keywords = kw_extractor.extract_keywords(text)
-        return [kw[0] for kw in keywords]
-    except Exception:
-        # Fallback: simple word frequency
-        words = re.findall(r'\b[a-z]{3,}\b', text.lower())
-        common_words = Counter(words).most_common(max_keywords)
-        return [word for word, _ in common_words]
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
 
-def optimize_resume_content(resume_text, job_description):
-    """
-    Optimize resume content based on job description
-    Returns optimized summary and matched skills
-    """
-    # Extract keywords from job description
-    job_keywords = set(extract_keywords_from_text(job_description, 30))
-    
-    # Extract skills from resume (simple word extraction)
-    resume_words = set(re.findall(r'\b[a-z]{3,}\b', resume_text.lower()))
-    
-    # Find matching skills
-    matched_skills = job_keywords.intersection(resume_words)
-    missing_keywords = job_keywords - resume_words
-    
-    # Generate optimized summary
-    top_skills = list(matched_skills)[:8]
-    
-    if top_skills:
-        summary = (
-            f"Results-driven professional with expertise in {', '.join(top_skills[:5])}. "
-            f"Proven track record in delivering high-impact solutions and driving organizational success. "
-            f"Strong technical and analytical skills combined with excellent problem-solving abilities."
-        )
-    else:
-        summary = (
-            "Accomplished professional with demonstrated expertise in technology and innovation. "
-            "Proven ability to deliver results in fast-paced environments. "
-            "Strong analytical and communication skills with a focus on continuous improvement."
-        )
-    
-    return {
-        'summary': summary,
-        'matched_skills': list(matched_skills)[:15],
-        'missing_keywords': list(missing_keywords)[:10],
-        'match_score': int((len(matched_skills) / len(job_keywords)) * 100) if job_keywords else 0
-    }
-
-# Load environment variables from .env file
-try:
-    from dotenv import load_dotenv
-    load_dotenv()
-except ImportError:
-    pass  # dotenv not installed, will use system env vars
-
-logging.basicConfig(level=logging.INFO)
-
+# ============================================
+# FLASK APP INITIALIZATION
+# ============================================
 app = Flask(__name__)
 
-# Fix CORS to handle OPTIONS requests
+# CORS Configuration
 CORS(app, resources={
     r"/*": {
         "origins": "*",
-        "methods": ["GET", "POST", "OPTIONS"],
-        "allow_headers": ["Content-Type"]
+        "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+        "allow_headers": ["Content-Type", "Authorization"]
     }
 })
 
-# Add OPTIONS handler
 @app.before_request
 def handle_preflight():
     if request.method == "OPTIONS":
         response = make_response()
         response.headers.add("Access-Control-Allow-Origin", "*")
-        response.headers.add("Access-Control-Allow-Headers", "Content-Type")
-        response.headers.add("Access-Control-Allow-Methods", "GET,POST,OPTIONS")
+        response.headers.add("Access-Control-Allow-Headers", "Content-Type, Authorization")
+        response.headers.add("Access-Control-Allow-Methods", "GET,POST,PUT,DELETE,OPTIONS")
         return response
 
-# Configure upload folders
+# Configure folders
 app.config['UPLOAD_FOLDER'] = 'static/audio'
+app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB
 os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
+os.makedirs('static', exist_ok=True)
 
-# Tesseract OCR path - make sure this is installed if you want OCR fallback
+# ============================================
+# MONGODB DATABASE CONFIGURATION
+# ============================================
+MONGO_URI = os.getenv('MONGO_URI', 'mongodb://localhost:27017/')
+DB_NAME = os.getenv('DB_NAME', 'smartcareer_db')
+
+try:
+    mongo_client = MongoClient(MONGO_URI, serverSelectionTimeoutMS=5000)
+    mongo_client.admin.command('ping')
+    mongodb = mongo_client[DB_NAME]
+    logger.info(f"✅ Connected to MongoDB: {DB_NAME}")
+except Exception as e:
+    logger.error(f"❌ MongoDB connection failed: {e}")
+    mongodb = None
+
+app.config['db'] = mongodb
+
+# ============================================
+# TESSERACT OCR CONFIGURATION
+# ============================================
+OCR_AVAILABLE = False
 try:
     import pytesseract
-    # adjust the tesseract_cmd path if needed on your system
-    pytesseract.pytesseract.tesseract_cmd = r"C:\Program Files\Tesseract-OCR\tesseract.exe"
-    OCR_AVAILABLE = True
+    if os.name == 'nt':  # Windows
+        tesseract_path = r"C:\Program Files\Tesseract-OCR\tesseract.exe"
+        if os.path.exists(tesseract_path):
+            pytesseract.pytesseract.tesseract_cmd = tesseract_path
+            OCR_AVAILABLE = True
+    else:
+        OCR_AVAILABLE = True
+    logger.info("✅ Tesseract OCR available")
 except ImportError:
-    app.logger.warning("pytesseract not installed. OCR fallback disabled.")
-    OCR_AVAILABLE = False
+    logger.warning("⚠️ pytesseract not installed")
+except Exception as e:
+    logger.warning(f"⚠️ Tesseract error: {e}")
 
-# Load spaCy
+# ============================================
+# LOAD SPACY MODEL
+# ============================================
 try:
     nlp = spacy.load("en_core_web_sm")
+    logger.info("✅ spaCy model loaded")
 except OSError:
-    app.logger.error("spaCy model 'en_core_web_sm' not found. Run: python -m spacy download en_core_web_sm")
+    logger.error("❌ spaCy model not found. Run: python -m spacy download en_core_web_sm")
     raise
 
-# Load models
-try:
-    it_skill_model = joblib.load("models/IT_skill_model.pkl")
-    nonit_skill_model = joblib.load("models/Non_IT_skill_model.pkl")
-    it_tfidf = joblib.load("models/IT_tfidf.pkl")
-    nonit_tfidf = joblib.load("models/Non_IT_tfidf.pkl")
-    it_mlb = joblib.load("models/IT_mlb.pkl")
-    nonit_mlb = joblib.load("models/Non_IT_mlb.pkl")
-    it_role_model = joblib.load("models/IT_job_role_model.pkl")
-    nonit_role_model = joblib.load("models/Non_IT_job_role_model.pkl")
-    it_course_model = joblib.load("models/IT_course_model.pkl")
-    nonit_course_model = joblib.load("models/NonIT_course_model.pkl")
-    it_cert_model = joblib.load("models/IT_cert_model.pkl")
-    nonit_cert_model = joblib.load("models/NonIT_cert_model.pkl")
-    it_coursecert_tfidf = joblib.load("models/IT_coursecert_tfidf.pkl")
-    nonit_coursecert_tfidf = joblib.load("models/NonIT_coursecert_tfidf.pkl")
-except FileNotFoundError as e:
-    app.logger.error(f"Model file not found: {e}")
-    raise
+# ============================================
+# LOAD ML MODELS
+# ============================================
+MODEL_FILES = {
+    'it_skill_model': 'models/IT_skill_model.pkl',
+    'nonit_skill_model': 'models/Non_IT_skill_model.pkl',
+    'it_tfidf': 'models/IT_tfidf.pkl',
+    'nonit_tfidf': 'models/Non_IT_tfidf.pkl',
+    'it_mlb': 'models/IT_mlb.pkl',
+    'nonit_mlb': 'models/Non_IT_mlb.pkl',
+    'it_role_model': 'models/IT_job_role_model.pkl',
+    'nonit_role_model': 'models/Non_IT_job_role_model.pkl',
+    'it_course_model': 'models/IT_course_model.pkl',
+    'nonit_course_model': 'models/NonIT_course_model.pkl',
+    'it_cert_model': 'models/IT_cert_model.pkl',
+    'nonit_cert_model': 'models/NonIT_cert_model.pkl',
+    'it_coursecert_tfidf': 'models/IT_coursecert_tfidf.pkl',
+    'nonit_coursecert_tfidf': 'models/NonIT_coursecert_tfidf.pkl'
+}
 
-IT_SKILL_LIST = ['python', 'java', 'sql', 'machine learning', 'data analysis', 'react', 'c++', 'cloud computing', 
-                 'javascript', 'aws', 'docker', 'kubernetes', 'tensorflow', 'django', 'flask', 'nodejs']
-NON_IT_SKILL_LIST = ['communication', 'excel', 'salesforce', 'customer support', 'team management', 'public speaking',
-                     'leadership', 'project management', 'negotiation', 'time management', 'problem solving']
+models = {}
+for name, path in MODEL_FILES.items():
+    try:
+        models[name] = joblib.load(path)
+        logger.info(f"✅ Loaded {name}")
+    except FileNotFoundError:
+        logger.warning(f"⚠️ Model not found: {path}")
+        models[name] = None
+    except Exception as e:
+        logger.error(f"❌ Error loading {name}: {e}")
+        models[name] = None
 
-# -------------------- Utility Functions --------------------
+# ============================================
+# SKILL LISTS
+# ============================================
+IT_SKILL_LIST = [
+    'python', 'java', 'sql', 'machine learning', 'data analysis', 
+    'react', 'c++', 'cloud computing', 'javascript', 'aws', 
+    'docker', 'kubernetes', 'tensorflow', 'django', 'flask', 
+    'nodejs', 'mongodb', 'postgresql', 'git', 'linux'
+]
+
+NON_IT_SKILL_LIST = [
+    'communication', 'excel', 'salesforce', 'customer support', 
+    'team management', 'public speaking', 'leadership', 
+    'project management', 'negotiation', 'time management', 
+    'problem solving', 'critical thinking', 'adaptability'
+]
+
+# ============================================
+# UTILITY FUNCTIONS
+# ============================================
 def clean_text(text):
     """Clean and normalize text"""
     text = re.sub(r"<[^>]+>", "", str(text))
@@ -177,24 +173,20 @@ def extract_skills(text, skill_list):
     return [skill for skill in skill_list if skill.lower() in text_lower]
 
 def get_missing_skills(resume_skills, required_skills):
-    """Get skills that are missing from resume"""
+    """Get skills missing from resume"""
     return list(set(required_skills) - set(resume_skills))
 
 def detect_domain(text):
-    """Detect if resume is IT or Non-IT based on skills"""
+    """Detect if resume is IT or Non-IT"""
     text_lower = text.lower()
     it_score = sum(1 for skill in IT_SKILL_LIST if skill.lower() in text_lower)
     nonit_score = sum(1 for skill in NON_IT_SKILL_LIST if skill.lower() in text_lower)
     return "IT" if it_score >= nonit_score else "Non-IT"
 
-# -----------------------------
-# PDF Text Extraction (Fixed)
-# -----------------------------
 def extract_text_from_pdf(file):
-    """Extract text from PDF using multiple methods"""
+    """Extract text from PDF"""
     text = ""
-
-    # Primary method: PyMuPDF (most reliable)
+    
     try:
         file.seek(0)
         pdf_bytes = file.read()
@@ -208,188 +200,237 @@ def extract_text_from_pdf(file):
         doc.close()
         
         if text.strip():
-            app.logger.info("PDF text extracted successfully using PyMuPDF")
+            logger.info("✅ PDF extracted using PyMuPDF")
             return text.strip()
     except Exception as e:
-        app.logger.warning(f"PyMuPDF extraction failed: {e}")
-
-    # Fallback: OCR if available
+        logger.warning(f"PyMuPDF failed: {e}")
+    
     if OCR_AVAILABLE:
         try:
             file.seek(0)
             images = convert_from_bytes(file.read())
-            app.logger.info(f"Performing OCR on {len(images)} pages...")
-            
-            for idx, img in enumerate(images):
-                page_text = pytesseract.image_to_string(img)
-                text += page_text + "\n"
-                app.logger.info(f"OCR page {idx+1} completed")
+            for img in images:
+                text += pytesseract.image_to_string(img) + "\n"
             
             if text.strip():
-                app.logger.info("PDF text extracted successfully using OCR")
+                logger.info("✅ PDF extracted using OCR")
                 return text.strip()
         except Exception as e:
-            app.logger.error(f"OCR extraction failed: {e}")
-
+            logger.error(f"OCR failed: {e}")
+    
     return text.strip() if text else "Unable to extract text from PDF"
 
-def generate_fallback_response(prompt):
-    """Generate basic response without API - improved version"""
-    # Extract skills from prompt
-    skills_match = re.search(r'Skills?[:\s]+(.+?)(?:\n|Job)', prompt, re.IGNORECASE | re.DOTALL)
-    skills_text = skills_match.group(1).strip() if skills_match else ""
-    
-    # Extract job info
-    job_match = re.search(r'Job[:\s]+(.+?)(?:\n|Create|$)', prompt, re.IGNORECASE | re.DOTALL)
-    job_text = job_match.group(1).strip() if job_match else ""
-    
-    # Generate professional summary based on extracted info
-    summaries = [
-        f"Results-driven professional with demonstrated expertise in {skills_text[:100]}. " +
-        "Proven ability to deliver high-impact solutions in fast-paced environments.",
-        
-        f"Accomplished specialist with strong background in {skills_text[:100]}. " +
-        "Track record of excellence in project execution and technical innovation.",
-        
-        f"Dynamic professional skilled in {skills_text[:100]}. " +
-        "Combines technical proficiency with strategic thinking to drive organizational success."
-    ]
-    
-    # Select summary based on skills length
-    summary_idx = len(skills_text) % len(summaries) if summaries else 0
-    
-    return [{
-        "summary_text": summaries[summary_idx]
-    }]
+def extract_keywords_from_text(text, max_keywords=20):
+    """Extract keywords using YAKE"""
+    try:
+        kw_extractor = yake.KeywordExtractor(
+            lan="en", n=2, dedupLim=0.9, top=max_keywords
+        )
+        keywords = kw_extractor.extract_keywords(text)
+        return [kw[0] for kw in keywords]
+    except:
+        words = re.findall(r'\b[a-z]{3,}\b', text.lower())
+        common_words = Counter(words).most_common(max_keywords)
+        return [word for word, _ in common_words]
 
-# Register interview blueprint
-app.register_blueprint(interview_bp)
+def optimize_resume_content(resume_text, job_description):
+    """Optimize resume based on job description"""
+    job_keywords = set(extract_keywords_from_text(job_description, 30))
+    resume_words = set(re.findall(r'\b[a-z]{3,}\b', resume_text.lower()))
+    
+    matched_skills = job_keywords.intersection(resume_words)
+    missing_keywords = job_keywords - resume_words
+    top_skills = list(matched_skills)[:8]
+    
+    if top_skills:
+        summary = (
+            f"Results-driven professional with expertise in {', '.join(top_skills[:5])}. "
+            f"Proven track record in delivering high-impact solutions."
+        )
+    else:
+        summary = "Accomplished professional with strong technical background."
+    
+    return {
+        'summary': summary,
+        'matched_skills': list(matched_skills)[:15],
+        'missing_keywords': list(missing_keywords)[:10],
+        'match_score': int((len(matched_skills) / len(job_keywords)) * 100) if job_keywords else 0
+    }
 
-# -------------------- Routes --------------------
+# ============================================
+# REGISTER BLUEPRINTS
+# ============================================
+try:
+    from interview_engine import interview_bp
+    app.register_blueprint(interview_bp, url_prefix='/api/interview')
+    logger.info("✅ Interview blueprint registered")
+except Exception as e:
+    logger.warning(f"⚠️ Interview blueprint error: {e}")
 
+try:
+    from recruiter_engine import recruiter_bp
+    app.register_blueprint(recruiter_bp, url_prefix='/api/recruiter')
+    logger.info("✅ Recruiter blueprint registered")
+except Exception as e:
+    logger.warning(f"⚠️ Recruiter blueprint error: {e}")
+
+# ============================================
+# ROUTES - HOME & HEALTH
+# ============================================
 @app.route("/")
 def home():
-    return render_template("index.html")
+    try:
+        return render_template("index.html")
+    except:
+        return jsonify({
+            "message": "SmartCareer API",
+            "version": "1.0.0",
+            "status": "running"
+        })
 
+@app.route("/health")
+@app.route("/api/health")
+def health():
+    return jsonify({
+        "status": "healthy",
+        "ocr_available": OCR_AVAILABLE,
+        "database": "connected" if mongodb is not None else "disconnected",
+        "models_loaded": sum(1 for m in models.values() if m is not None)
+    })
+
+# ============================================
+# ROUTES - RESUME ANALYSIS
+# ============================================
 @app.route("/detect_domain", methods=["POST"])
 def detect_resume_domain():
-    """Detect if resume is IT or Non-IT domain"""
+    """Detect resume domain"""
     if "resume" not in request.files:
-        return jsonify({"error": "No resume file uploaded."}), 400
-
+        return jsonify({"error": "No resume uploaded"}), 400
+    
     file = request.files["resume"]
     if not file.filename.lower().endswith(".pdf"):
-        return jsonify({"error": "Only PDF files are supported."}), 400
-
+        return jsonify({"error": "Only PDF files supported"}), 400
+    
     try:
         text = extract_text_from_pdf(file)
         if not text or text == "Unable to extract text from PDF":
-            return jsonify({"error": "Could not extract text from PDF. Please ensure the PDF is readable."}), 400
+            return jsonify({"error": "Could not extract text"}), 400
         
         cleaned = lemmatize(clean_text(text))
         domain = detect_domain(cleaned)
-
+        
         return jsonify({
             "domain": domain,
-            "cleaned_text": cleaned[:500] + "..." if len(cleaned) > 500 else cleaned,
-            "message": f"Your resume seems to belong to the {domain} domain. Do you want to proceed?"
+            "cleaned_text": cleaned[:500] + "...",
+            "message": f"Resume belongs to {domain} domain"
         })
-
     except Exception as e:
-        app.logger.error(f"Error in detect_domain: {e}")
+        logger.error(f"Error in detect_domain: {e}")
         return jsonify({"error": str(e)}), 500
 
 @app.route("/proceed_prediction", methods=["POST"])
 def proceed_prediction():
-    """Make predictions based on resume content"""
+    """Make predictions"""
     if "resume" not in request.files:
-        return jsonify({"error": "No resume file uploaded."}), 400
-
+        return jsonify({"error": "No resume uploaded"}), 400
+    
     file = request.files["resume"]
     if not file.filename.lower().endswith(".pdf"):
-        return jsonify({"error": "Only PDF files are supported."}), 400
-
+        return jsonify({"error": "Only PDF files supported"}), 400
+    
     try:
         text = extract_text_from_pdf(file)
         if not text or text == "Unable to extract text from PDF":
-            return jsonify({"error": "Could not extract text from PDF."}), 400
+            return jsonify({"error": "Could not extract text"}), 400
         
         cleaned = lemmatize(clean_text(text))
         domain = detect_domain(cleaned)
-
+        
         if domain == "IT":
-            vec = it_tfidf.transform([cleaned])
-            pred = it_skill_model.predict(vec)
-            skills = it_mlb.inverse_transform(pred)[0] if hasattr(it_mlb, 'inverse_transform') else []
-            role = it_role_model.predict(it_tfidf.transform([" ".join(skills)]))[0] if skills else it_role_model.predict(it_tfidf.transform([cleaned]))[0]
+            if not all([models['it_tfidf'], models['it_skill_model']]):
+                return jsonify({"error": "IT models not loaded"}), 500
+            
+            vec = models['it_tfidf'].transform([cleaned])
+            pred = models['it_skill_model'].predict(vec)
+            skills = models['it_mlb'].inverse_transform(pred)[0] if models['it_mlb'] else []
+            role = models['it_role_model'].predict(models['it_tfidf'].transform([" ".join(skills)]))[0] if skills and models['it_role_model'] else "Not determined"
             resume_skills = extract_skills(cleaned, IT_SKILL_LIST)
             missing = get_missing_skills(resume_skills, IT_SKILL_LIST)
-            x_vec = it_coursecert_tfidf.transform([" ".join(missing) if missing else "general"])
-            course = it_course_model.predict(x_vec)[0]
-            cert = it_cert_model.predict(x_vec)[0]
+            
+            if models['it_coursecert_tfidf'] and models['it_course_model']:
+                x_vec = models['it_coursecert_tfidf'].transform([" ".join(missing) if missing else "general"])
+                course = models['it_course_model'].predict(x_vec)[0]
+                cert = models['it_cert_model'].predict(x_vec)[0] if models['it_cert_model'] else "N/A"
+            else:
+                course = cert = "N/A"
         else:
-            vec = nonit_tfidf.transform([cleaned])
-            pred = nonit_skill_model.predict(vec)
-            skills = nonit_mlb.inverse_transform(pred)[0] if hasattr(nonit_mlb, 'inverse_transform') else []
-            role = nonit_role_model.predict(nonit_tfidf.transform([" ".join(skills)]))[0] if skills else nonit_role_model.predict(nonit_tfidf.transform([cleaned]))[0]
+            if not all([models['nonit_tfidf'], models['nonit_skill_model']]):
+                return jsonify({"error": "Non-IT models not loaded"}), 500
+            
+            vec = models['nonit_tfidf'].transform([cleaned])
+            pred = models['nonit_skill_model'].predict(vec)
+            skills = models['nonit_mlb'].inverse_transform(pred)[0] if models['nonit_mlb'] else []
+            role = models['nonit_role_model'].predict(models['nonit_tfidf'].transform([" ".join(skills)]))[0] if skills and models['nonit_role_model'] else "Not determined"
             resume_skills = extract_skills(cleaned, NON_IT_SKILL_LIST)
             missing = get_missing_skills(resume_skills, NON_IT_SKILL_LIST)
-            x_vec = nonit_coursecert_tfidf.transform([" ".join(missing) if missing else "general"])
-            course = nonit_course_model.predict(x_vec)[0]
-            cert = nonit_cert_model.predict(x_vec)[0]
-
+            
+            if models['nonit_coursecert_tfidf'] and models['nonit_course_model']:
+                x_vec = models['nonit_coursecert_tfidf'].transform([" ".join(missing) if missing else "general"])
+                course = models['nonit_course_model'].predict(x_vec)[0]
+                cert = models['nonit_cert_model'].predict(x_vec)[0] if models['nonit_cert_model'] else "N/A"
+            else:
+                course = cert = "N/A"
+        
         return jsonify({
             "domain": domain,
-            "predicted_skills": ", ".join(skills) if skills else "No specific skills predicted",
+            "predicted_skills": ", ".join(skills) if skills else "No skills predicted",
             "resume_skills": resume_skills,
             "missing_skills": missing,
             "predicted_role": role,
-            "recommendation": {
-                "course": course,
-                "certificate": cert
-            }
+            "recommendation": {"course": course, "certificate": cert}
         })
-
     except Exception as e:
-        app.logger.error(f"Error in proceed_prediction: {e}")
+        logger.error(f"Error in prediction: {e}")
         import traceback
         traceback.print_exc()
         return jsonify({"error": str(e)}), 500
 
+# ============================================
+# ROUTES - JOB SCRAPING
+# ============================================
 @app.route("/scrape-jobs", methods=["POST"])
 def scrape_jobs():
-    """Scrape jobs from Adzuna API"""
+    """Scrape jobs from Adzuna"""
     data = request.get_json() or {}
     job_role = data.get('job_role', '').strip()
     location = data.get('location', '').strip()
     salary_min = data.get('salary_min', '').strip()
-
+    
     if not job_role:
         return jsonify([])
-
+    
     base_url = "https://api.adzuna.com/v1/api/jobs/in/search/1"
     params = {
         "app_id": "30c6c5c3",
         "app_key": "4f3d3ea6ec822580798794aaa7fefd75",
         "results_per_page": 6,
-        "what": job_role,
-        "content-type": "application/json"
+        "what": job_role
     }
-
+    
     if location and location.lower() != "remote":
         params["where"] = location
-
+    
     if salary_min.isdigit() and int(salary_min) >= 10000:
         params["salary_min"] = salary_min
-
+    
     try:
         response = requests.get(base_url, params=params, timeout=10)
         if response.status_code != 200:
-            return jsonify({"error": f"Adzuna API error: {response.status_code}"}), response.status_code
-
+            return jsonify({"error": f"API error: {response.status_code}"}), response.status_code
+        
         data = response.json()
         jobs = []
-
+        
         for job in data.get("results", []):
             jobs.append({
                 "title": job.get("title"),
@@ -399,54 +440,47 @@ def scrape_jobs():
                 "salary_max": job.get("salary_max", "N/A"),
                 "url": job.get("redirect_url", "#")
             })
-
+        
         return jsonify(jobs)
-
     except Exception as e:
-        app.logger.error(f"Error scraping jobs: {e}")
-        return jsonify({"error": "Failed to fetch jobs", "details": str(e)}), 500
+        logger.error(f"Job scraping error: {e}")
+        return jsonify({"error": str(e)}), 500
 
-# -----------------------------
-# Resume Optimization Endpoint (Improved)
-# -----------------------------
+# ============================================
+# ROUTES - RESUME OPTIMIZATION
+# ============================================
 @app.route('/optimize_resume', methods=['POST'])
 def optimize_resume():
-    """Optimize resume - extract ALL content"""
+    """Optimize resume"""
     if 'resume' not in request.files:
         return jsonify({"error": "No resume uploaded"}), 400
-
+    
     resume_file = request.files['resume']
     job_description = request.form.get('job_description', '')
-
-    resume_text = extract_text_from_pdf(resume_file)
-
-    if not resume_text or resume_text == "Unable to extract text from PDF":
-        return jsonify({"error": "Could not extract text from resume"}), 400
-
+    
     try:
-        # Parse resume
+        resume_text = extract_text_from_pdf(resume_file)
+        
+        if not resume_text or resume_text == "Unable to extract text from PDF":
+            return jsonify({"error": "Could not extract text"}), 400
+        
+        try:
+            from models.resume_parser import ResumeParser
+            from models.fixed_template_renderer import FixedTemplateRenderer
+        except ImportError as e:
+            logger.error(f"Import error: {e}")
+            return jsonify({"error": "Resume parser not available"}), 500
+        
         parser = ResumeParser()
         parsed_data = parser.parse_resume(resume_text)
-
-        # Safeguard logs in case keys are missing
-        name = parsed_data.get('personal_info', {}).get('name', 'Unknown')
-        education_count = len(parsed_data.get('education', []))
-        projects_count = len(parsed_data.get('projects', []))
-
-        app.logger.info(f"Parsed: {name}")
-        app.logger.info(f"Education: {education_count} entries")
-        app.logger.info(f"Projects: {projects_count} entries")
-
-        # Optimize based on JD
+        
         if job_description:
             cleaned_text = clean_text(resume_text)
             optimization = optimize_resume_content(cleaned_text, job_description)
             summary = optimization['summary']
-            app.logger.info(f"Match score: {optimization['match_score']}%")
         else:
             summary = "Experienced professional with strong technical background."
-
-        # Build resume with ALL content (ensure keys exist)
+        
         optimized_resume = {
             "personal_info": parsed_data.get('personal_info', {}),
             "professional_summary": summary,
@@ -458,131 +492,20 @@ def optimize_resume():
             "achievements": parsed_data.get('achievements', []),
             "research": parsed_data.get('research', [])
         }
-
-        os.makedirs('static', exist_ok=True)
-
+        
         renderer = FixedTemplateRenderer()
         pdf_path = renderer.render_resume(optimized_resume)
-
-        app.logger.info(f"Resume generated: {pdf_path}")
-
+        
         return send_file(pdf_path, as_attachment=True, download_name="optimized_resume.pdf")
-
     except Exception as e:
-        app.logger.error(f"Error: {e}")
+        logger.error(f"Resume optimization error: {e}")
         import traceback
         traceback.print_exc()
         return jsonify({"error": str(e)}), 500
 
-def prioritize_content_by_jd(parsed_data, matched_skills):
-    """Prioritize and trim content to fit one page based on JD"""
-    # Limit education to top 4
-    parsed_data['education'] = parsed_data.get('education', [])[:4]
-    
-    # Limit projects to 3 most relevant
-    if len(parsed_data.get('projects', [])) > 3:
-        parsed_data['projects'] = parsed_data['projects'][:3]
-    
-    # Limit project descriptions to 3 bullets each
-    for proj in parsed_data.get('projects', []):
-        if len(proj.get('description', [])) > 3:
-            proj['description'] = proj['description'][:3]
-    
-    # Limit certifications to 4
-    if len(parsed_data.get('certifications', [])) > 4:
-        parsed_data['certifications'] = parsed_data['certifications'][:4]
-    
-    # Limit achievements to 5
-    if len(parsed_data.get('achievements', [])) > 5:
-        parsed_data['achievements'] = parsed_data['achievements'][:5]
-    
-    # Limit research details to 3 bullets
-    for res in parsed_data.get('research', []):
-        if len(res.get('details', [])) > 3:
-            res['details'] = res['details'][:3]
-    
-    # Limit experience to 2
-    if len(parsed_data.get('experience', [])) > 2:
-        parsed_data['experience'] = parsed_data['experience'][:2]
-    
-    # Limit experience responsibilities to 3 each
-    for exp in parsed_data.get('experience', []):
-        if len(exp.get('responsibilities', [])) > 3:
-            exp['responsibilities'] = exp['responsibilities'][:3]
-    
-    return parsed_data
-
-# -----------------------------
-# ADD these NEW routes:
-# -----------------------------
-
-@app.route('/create_resume', methods=['POST'])
-def create_resume():
-    """Create resume from user-provided data"""
-    try:
-        data = request.get_json()
-        
-        if not data:
-            return jsonify({"error": "No data provided"}), 400
-        
-        # Validate required fields
-        if not data.get('name') or not data.get('email'):
-            return jsonify({"error": "Name and Email are required"}), 400
-        
-        # Get job description for optimization
-        job_description = data.get('job_description', '')
-        
-        # Build resume data structure
-        resume_data = {
-            "personal_info": {
-                "name": data.get('name', 'Your Name'),
-                "phone": data.get('phone', ''),
-                "email": data.get('email', ''),
-                "location": data.get('location', ''),
-                "linkedin": data.get('linkedin', ''),
-                "github": data.get('github', '')
-            },
-            "professional_summary": data.get('summary', ''),
-            "education": data.get('education', []),
-            "experience": data.get('experience', []),
-            "projects": data.get('projects', []),
-            "skills": data.get('skills', {}),
-            "certifications": data.get('certifications', []),
-            "achievements": data.get('achievements', []),
-            "research": data.get('research', [])
-        }
-        
-        # If job description provided, optimize summary
-        if job_description and not resume_data['professional_summary']:
-            skills_text = str(resume_data['skills'])
-            optimization = optimize_resume_content(skills_text, job_description)
-            resume_data['professional_summary'] = optimization['summary']
-        
-        # Default summary if none provided
-        if not resume_data['professional_summary']:
-            resume_data['professional_summary'] = (
-                "Motivated professional with strong analytical and problem-solving skills. "
-                "Committed to delivering high-quality results and continuous learning."
-            )
-        
-        # Ensure static directory exists
-        os.makedirs('static', exist_ok=True)
-        
-        # Render PDF
-        renderer = FixedTemplateRenderer()
-        pdf_path = renderer.render_resume(resume_data)
-        
-        return send_file(pdf_path, as_attachment=True, download_name="generated_resume.pdf")
-    
-    except Exception as e:
-        app.logger.error(f"Error in create_resume: {e}")
-        import traceback
-        traceback.print_exc()
-        return jsonify({"error": f"Failed to create resume: {str(e)}"}), 500
-
 @app.route('/check_ats_score', methods=['POST'])
 def check_ats_score():
-    """Check ATS compatibility score of resume against job description"""
+    """Check ATS score"""
     if 'resume' not in request.files:
         return jsonify({"error": "No resume uploaded"}), 400
     
@@ -590,27 +513,23 @@ def check_ats_score():
     job_description = request.form.get('job_description', '')
     
     if not job_description:
-        return jsonify({"error": "Job description is required"}), 400
+        return jsonify({"error": "Job description required"}), 400
     
     try:
-        # Extract resume text
         resume_text = extract_text_from_pdf(resume_file)
         
         if not resume_text or resume_text == "Unable to extract text from PDF":
-            return jsonify({"error": "Could not extract text from resume"}), 400
+            return jsonify({"error": "Could not extract text"}), 400
         
-        # Clean and analyze text
         cleaned_resume = clean_text(resume_text)
         cleaned_jd = clean_text(job_description)
         
-        # 1. KEYWORD MATCHING SCORE (40% weight)
         jd_keywords = set(extract_keywords_from_text(job_description, 30))
         resume_keywords = set(extract_keywords_from_text(resume_text, 30))
         matched_keywords = jd_keywords.intersection(resume_keywords)
         
         keyword_match_score = int((len(matched_keywords) / len(jd_keywords)) * 100) if jd_keywords else 0
         
-        # 2. SKILL EXTRACTION & MATCHING (25% weight)
         domain = detect_domain(cleaned_resume)
         skill_list = IT_SKILL_LIST if domain == "IT" else NON_IT_SKILL_LIST
         
@@ -620,53 +539,29 @@ def check_ats_score():
         matched_skills = list(set(resume_skills).intersection(set(jd_skills)))
         skill_match_score = int((len(matched_skills) / len(jd_skills)) * 100) if jd_skills else 0
         
-        # 3. FORMATTING & STRUCTURE SCORE (20% weight)
         format_score = 100
-        
-        # Check contact information
         has_email = bool(re.search(r'[\w\.-]+@[\w\.-]+\.\w+', resume_text))
-        has_phone = bool(re.search(r'(?:\+\d{1,3}|\d{3})[.\s-]?\d{3}[.\s-]?\d{4}|\(\d{3}\)\s?\d{3}[.\s-]?\d{4}', resume_text))
+        has_phone = bool(re.search(r'(?:\+\d{1,3}|\d{3})[.\s-]?\d{3}[.\s-]?\d{4}', resume_text))
         has_linkedin = bool(re.search(r'linkedin\.com/in/[\w\-]+', resume_text, re.IGNORECASE))
         
-        if not has_email:
-            format_score -= 15
-        if not has_phone:
-            format_score -= 15
-        if not has_linkedin:
-            format_score -= 10
+        if not has_email: format_score -= 15
+        if not has_phone: format_score -= 15
+        if not has_linkedin: format_score -= 10
         
-        # Check word count (300-900 words is ideal for ATS)
         word_count = len(resume_text.split())
-        if word_count < 250:
-            format_score -= 20
-        elif word_count > 1500:
-            format_score -= 15
+        if word_count < 250: format_score -= 20
+        elif word_count > 1500: format_score -= 15
         
-        # Check for important sections
-        sections_found = 0
-        section_keywords = ['experience', 'education', 'skill', 'project', 'certification']
-        for keyword in section_keywords:
-            if keyword.lower() in cleaned_resume:
-                sections_found += 1
-        
-        section_score = int((sections_found / len(section_keywords)) * 10)
-        format_score += section_score
-        format_score = min(100, max(0, format_score))
-        
-        # 4. LENGTH & CONTENT COMPLETENESS (15% weight)
-        completeness_score = 75  # Base score
-        
-        # Add points for having key sections
-        if re.search(r'education|degree|school|university', cleaned_resume, re.IGNORECASE):
+        completeness_score = 75
+        if re.search(r'education|degree', cleaned_resume, re.IGNORECASE):
             completeness_score += 10
-        if re.search(r'experience|worked|job|responsibility', cleaned_resume, re.IGNORECASE):
+        if re.search(r'experience|worked', cleaned_resume, re.IGNORECASE):
             completeness_score += 10
-        if re.search(r'skill|proficient|expertise|technical', cleaned_resume, re.IGNORECASE):
+        if re.search(r'skill|proficient', cleaned_resume, re.IGNORECASE):
             completeness_score += 5
         
         completeness_score = min(100, completeness_score)
         
-        # CALCULATE OVERALL ATS SCORE
         overall_score = int(
             (keyword_match_score * 0.40) +
             (skill_match_score * 0.25) +
@@ -674,92 +569,18 @@ def check_ats_score():
             (completeness_score * 0.15)
         )
         
-        # Generate intelligent suggestions
         suggestions = []
-        
-        # Keyword suggestions
         if keyword_match_score < 50:
-            missing_keywords = list(jd_keywords - resume_keywords)[:5]
+            missing = list(jd_keywords - resume_keywords)[:5]
             suggestions.append({
                 "type": "warning",
-                "message": f"⚠️ Low keyword match ({keyword_match_score}%). Add: {', '.join(missing_keywords)}"
-            })
-        elif keyword_match_score >= 70:
-            suggestions.append({
-                "type": "success",
-                "message": f"✅ Excellent keyword match ({keyword_match_score}%)"
-            })
-        else:
-            suggestions.append({
-                "type": "info",
-                "message": f"📝 Good keyword match ({keyword_match_score}%). Could improve further."
+                "message": f"⚠️ Low keyword match ({keyword_match_score}%). Add: {', '.join(missing)}"
             })
         
-        # Skill suggestions
-        if skill_match_score < 50 and jd_skills:
-            missing_skills = list(set(jd_skills) - set(resume_skills))[:5]
-            suggestions.append({
-                "type": "warning",
-                "message": f"⚠️ Add more required skills: {', '.join(missing_skills)}"
-            })
-        elif skill_match_score >= 70:
-            suggestions.append({
-                "type": "success",
-                "message": f"✅ Strong skills alignment ({skill_match_score}%)"
-            })
-        
-        # Contact info suggestions
         if not has_email or not has_phone:
-            missing = []
-            if not has_email:
-                missing.append("email")
-            if not has_phone:
-                missing.append("phone")
             suggestions.append({
                 "type": "warning",
-                "message": f"📞 Add missing contact info: {', '.join(missing)}"
-            })
-        else:
-            suggestions.append({
-                "type": "success",
-                "message": "✅ Complete contact information"
-            })
-        
-        # Length suggestions
-        if word_count < 250:
-            suggestions.append({
-                "type": "warning",
-                "message": f"📄 Resume too short ({word_count} words). Aim for 300-900 words."
-            })
-        elif word_count > 1500:
-            suggestions.append({
-                "type": "warning",
-                "message": f"📄 Resume too long ({word_count} words). Condense to 300-900 words."
-            })
-        else:
-            suggestions.append({
-                "type": "success",
-                "message": f"✅ Good resume length ({word_count} words)"
-            })
-        
-        # Missing sections
-        missing_sections = []
-        if not re.search(r'education|degree', cleaned_resume, re.IGNORECASE):
-            missing_sections.append("Education")
-        if not re.search(r'experience|worked', cleaned_resume, re.IGNORECASE):
-            missing_sections.append("Experience")
-        if not re.search(r'skill', cleaned_resume, re.IGNORECASE):
-            missing_sections.append("Skills")
-        
-        if missing_sections:
-            suggestions.append({
-                "type": "warning",
-                "message": f"📋 Add missing sections: {', '.join(missing_sections)}"
-            })
-        else:
-            suggestions.append({
-                "type": "success",
-                "message": "✅ All key sections present"
+                "message": "📞 Add missing contact information"
             })
         
         return jsonify({
@@ -773,219 +594,193 @@ def check_ats_score():
             "matched_skills": matched_skills[:10],
             "missing_skills": list(set(jd_skills) - set(resume_skills))[:10],
             "matched_keywords": list(matched_keywords)[:15],
-            "missing_keywords": list(jd_keywords - resume_keywords)[:10],
-            "contact_info": {
-                "email_found": has_email,
-                "phone_found": has_phone,
-                "linkedin_found": has_linkedin
-            },
-            "word_count": word_count,
             "suggestions": suggestions,
             "domain_detected": domain
         })
-    
     except Exception as e:
-        app.logger.error(f"Error checking ATS score: {e}")
-        import traceback
-        traceback.print_exc()
+        logger.error(f"ATS check error: {e}")
         return jsonify({"error": str(e)}), 500
-    
-    
 
-# ============== MOCK TEST ROUTES ==============
-
+# ============================================
+# ROUTES - MOCK TEST (MONGODB)
+# ============================================
 @app.route('/api/get_subjects', methods=['GET'])
 def get_subjects():
-    """Get list of available subjects and difficulty levels"""
+    """Get subjects and difficulties"""
     try:
-        subjects_query = "SELECT DISTINCT subject FROM questions"
-        difficulties_query = "SELECT DISTINCT difficulty FROM questions"
-
-        subjects = db.fetch_all(subjects_query)
-        difficulties = db.fetch_all(difficulties_query)
-
-        return jsonify({
-            "subjects": [s['subject'] for s in subjects],
-            "difficulties": [d['difficulty'] for d in difficulties]
-        })
+        if mongodb is None:
+            return jsonify({
+                "subjects": ["Python", "Java", "JavaScript", "Data Science", "SQL"],
+                "difficulties": ["Easy", "Medium", "Hard"]
+            })
+        
+        subjects = mongodb.questions.distinct("subject")
+        difficulties = mongodb.questions.distinct("difficulty")
+        
+        subjects = list(subjects) if subjects else ["Python", "Java", "JavaScript"]
+        difficulties = list(difficulties) if difficulties else ["Easy", "Medium", "Hard"]
+        
+        return jsonify({"subjects": subjects, "difficulties": difficulties})
     except Exception as e:
-        app.logger.error(f"Error fetching subjects/difficulties: {e}")
-        return jsonify({"error": str(e)}), 500
-
+        logger.error(f"Error fetching subjects: {e}")
+        return jsonify({
+            "subjects": ["Python", "Java", "JavaScript"],
+            "difficulties": ["Easy", "Medium", "Hard"]
+        })
 
 @app.route('/api/get_questions', methods=['POST'])
 def get_questions():
-    """Get 10 random questions for selected subject"""
+    """Get 10 random questions"""
     try:
         data = request.get_json()
         subject = data.get('subject')
-        difficulty = data.get('difficulty', None)  # Optional
+        difficulty = data.get('difficulty', None)
         
         if not subject:
-            return jsonify({"error": "Subject is required"}), 400
+            return jsonify({"error": "Subject required"}), 400
         
-        # Build query
+        if mongodb is None:
+            return jsonify({"error": "Database not connected"}), 500
+        
+        query = {"subject": subject}
         if difficulty:
-            query = """
-                SELECT id, subject, question_text, option_a, option_b, 
-                       option_c, option_d, difficulty
-                FROM questions 
-                WHERE subject = %s AND difficulty = %s
-                ORDER BY RAND()
-                LIMIT 10
-            """
-            params = (subject, difficulty)
-        else:
-            query = """
-                SELECT id, subject, question_text, option_a, option_b, 
-                       option_c, option_d, difficulty
-                FROM questions 
-                WHERE subject = %s
-                ORDER BY RAND()
-                LIMIT 10
-            """
-            params = (subject,)
+            query["difficulty"] = difficulty
         
-        questions = db.fetch_all(query, params)
+        questions = list(mongodb.questions.find(query).limit(10))
         
         if not questions:
-            return jsonify({"error": "No questions found for this subject"}), 404
+            return jsonify({"error": "No questions found"}), 404
         
-        # Format questions (hide correct answer)
         formatted_questions = []
         for q in questions:
             formatted_questions.append({
-                "id": q['id'],
-                "subject": q['subject'],
-                "question": q['question_text'],
+                "id": str(q['_id']),
+                "subject": q.get('subject', ''),
+                "question": q.get('question_text', ''),
                 "options": {
-                    "A": q['option_a'],
-                    "B": q['option_b'],
-                    "C": q['option_c'],
-                    "D": q['option_d']
+                    "A": q.get('option_a', ''),
+                    "B": q.get('option_b', ''),
+                    "C": q.get('option_c', ''),
+                    "D": q.get('option_d', '')
                 },
-                "difficulty": q['difficulty']
+                "difficulty": q.get('difficulty', 'Medium')
             })
         
         return jsonify({
             "questions": formatted_questions,
             "total": len(formatted_questions),
-            "time_limit": 600  # 10 minutes in seconds
+            "time_limit": 600
         })
-    
     except Exception as e:
-        app.logger.error(f"Error getting questions: {e}")
+        logger.error(f"Error getting questions: {e}")
+        import traceback
+        traceback.print_exc()
         return jsonify({"error": str(e)}), 500
 
 @app.route('/api/submit_test', methods=['POST'])
 def submit_test():
-    """Submit test and get results"""
+    """Submit test"""
     try:
         data = request.get_json()
         user_id = data.get('user_id', 'guest')
         subject = data.get('subject')
-        answers = data.get('answers', {})  # {question_id: selected_option}
+        answers = data.get('answers', {})
         time_taken = data.get('time_taken', 0)
         
         if not subject or not answers:
-            return jsonify({"error": "Subject and answers are required"}), 400
+            return jsonify({"error": "Subject and answers required"}), 400
         
-        # Get question IDs
-        question_ids = list(answers.keys())
-        placeholders = ','.join(['%s'] * len(question_ids))
+        if mongodb is None:
+            return jsonify({"error": "Database not connected"}), 500
         
-        # Fetch correct answers
-        query = f"""
-            SELECT id, correct_option, explanation, question_text,
-                   option_a, option_b, option_c, option_d
-            FROM questions 
-            WHERE id IN ({placeholders})
-        """
-        correct_data = db.fetch_all(query, tuple(question_ids))
+        question_ids = [ObjectId(qid) for qid in answers.keys()]
+        questions = list(mongodb.questions.find({'_id': {'$in': question_ids}}))
         
-        # Calculate score
         score = 0
         results = []
         
-        for q in correct_data:
-            q_id = str(q['id'])
+        for q in questions:
+            q_id = str(q['_id'])
             user_answer = answers.get(q_id, '')
-            correct_answer = q['correct_option']
+            correct_answer = q.get('correct_option', '')
             is_correct = user_answer.upper() == correct_answer.upper()
             
             if is_correct:
                 score += 1
             
             results.append({
-                "question_id": q['id'],
-                "question": q['question_text'],
+                "question_id": q_id,
+                "question": q.get('question_text', ''),
                 "options": {
-                    "A": q['option_a'],
-                    "B": q['option_b'],
-                    "C": q['option_c'],
-                    "D": q['option_d']
+                    "A": q.get('option_a', ''),
+                    "B": q.get('option_b', ''),
+                    "C": q.get('option_c', ''),
+                    "D": q.get('option_d', '')
                 },
                 "user_answer": user_answer,
                 "correct_answer": correct_answer,
                 "is_correct": is_correct,
-                "explanation": q['explanation']
+                "explanation": q.get('explanation', 'No explanation')
             })
         
-        total_questions = len(correct_data)
-        percentage = (score / total_questions * 100) if total_questions > 0 else 0
+        total = len(questions)
+        percentage = (score / total * 100) if total > 0 else 0
         
-        # Store test attempt
         try:
-            insert_query = """
-                INSERT INTO test_attempts 
-                (user_id, subject, score, total_questions, time_taken, answers, timestamp)
-                VALUES (%s, %s, %s, %s, %s, %s, %s)
-            """
-            db.execute_query(insert_query, (
-                user_id,
-                subject,
-                score,
-                total_questions,
-                time_taken,
-                json.dumps(results),
-                datetime.now()
-            ))
+            test_attempt = {
+                "user_id": user_id,
+                "subject": subject,
+                "score": score,
+                "total_questions": total,
+                "percentage": percentage,
+                "time_taken": time_taken,
+                "results": results,
+                "timestamp": datetime.utcnow()
+            }
+            mongodb.test_attempts.insert_one(test_attempt)
         except Exception as e:
-            app.logger.warning(f"Could not store test attempt: {e}")
+            logger.warning(f"Could not store test attempt: {e}")
         
         return jsonify({
             "score": score,
-            "total": total_questions,
+            "total": total,
             "percentage": round(percentage, 2),
             "results": results,
             "time_taken": time_taken,
-            "passed": percentage >= 60  # 60% passing criteria
+            "passed": percentage >= 60
         })
-    
     except Exception as e:
-        app.logger.error(f"Error submitting test: {e}")
+        logger.error(f"Error submitting test: {e}")
         import traceback
         traceback.print_exc()
         return jsonify({"error": str(e)}), 500
 
 @app.route('/api/test_history/<user_id>', methods=['GET'])
 def get_test_history(user_id):
-    """Get user's test history"""
+    """Get test history"""
     try:
-        query = """
-            SELECT attempt_id, subject, score, total_questions, 
-                   time_taken, timestamp
-            FROM test_attempts
-            WHERE user_id = %s
-            ORDER BY timestamp DESC
-            LIMIT 20
-        """
-        history = db.fetch_all(query, (user_id,))
+        if mongodb is None:
+            return jsonify({"error": "Database not connected"}), 500
         
-        # Calculate stats
+        history_cursor = mongodb.test_attempts.find(
+            {"user_id": user_id}
+        ).sort("timestamp", -1).limit(20)
+        
+        history = []
+        for h in history_cursor:
+            history.append({
+                "attempt_id": str(h['_id']),
+                "subject": h.get('subject', ''),
+                "score": h.get('score', 0),
+                "total_questions": h.get('total_questions', 0),
+                "percentage": h.get('percentage', 0),
+                "time_taken": h.get('time_taken', 0),
+                "timestamp": h.get('timestamp').isoformat() if h.get('timestamp') else None
+            })
+        
         if history:
             total_tests = len(history)
-            avg_score = sum(h['score']/h['total_questions'] for h in history) / total_tests * 100
+            avg_score = sum(h['percentage'] for h in history) / total_tests
             subjects = list(set(h['subject'] for h in history))
         else:
             total_tests = 0
@@ -1000,45 +795,226 @@ def get_test_history(user_id):
                 "subjects_attempted": subjects
             }
         })
-    
     except Exception as e:
-        app.logger.error(f"Error fetching history: {e}")
+        logger.error(f"Error fetching history: {e}")
         return jsonify({"error": str(e)}), 500
 
-@app.route('/api/test_result/<int:attempt_id>', methods=['GET'])
+@app.route('/api/test_result/<attempt_id>', methods=['GET'])
 def get_test_result(attempt_id):
-    """Get detailed result of a specific test attempt"""
+    """Get test result"""
     try:
-        query = """
-            SELECT * FROM test_attempts
-            WHERE attempt_id = %s
-        """
-        result = db.fetch_one(query, (attempt_id,))
+        if mongodb is None:
+            return jsonify({"error": "Database not connected"}), 500
+        
+        result = mongodb.test_attempts.find_one({"_id": ObjectId(attempt_id)})
         
         if not result:
             return jsonify({"error": "Test attempt not found"}), 404
         
-        # Parse JSON answers
-        result['answers'] = json.loads(result['answers']) if result['answers'] else []
+        formatted_result = {
+            "attempt_id": str(result['_id']),
+            "user_id": result.get('user_id', ''),
+            "subject": result.get('subject', ''),
+            "score": result.get('score', 0),
+            "total_questions": result.get('total_questions', 0),
+            "percentage": result.get('percentage', 0),
+            "time_taken": result.get('time_taken', 0),
+            "results": result.get('results', []),
+            "timestamp": result.get('timestamp').isoformat() if result.get('timestamp') else None
+        }
         
-        return jsonify(result)
-    
+        return jsonify(formatted_result)
     except Exception as e:
-        app.logger.error(f"Error fetching result: {e}")
+        logger.error(f"Error fetching result: {e}")
         return jsonify({"error": str(e)}), 500
 
+# ============================================
+# ROUTES - AUTH
+# ============================================
+@app.route('/api/auth/register', methods=['POST'])
+def register():
+    """User registration"""
+    if mongodb is None:
+        return jsonify({"error": "Database not connected"}), 500
     
-# Health check endpoint
-@app.route('/health')
-def health():
-    return jsonify({
-        "status": "healthy", 
-        "ocr_available": OCR_AVAILABLE,
-        "interview_system": "active"
-    })
+    try:
+        data = request.json
+        
+        required_fields = ['name', 'email', 'password', 'role']
+        for field in required_fields:
+            if field not in data:
+                return jsonify({'error': f'Missing field: {field}'}), 400
+        
+        existing_user = mongodb.users.find_one({'email': data['email']})
+        if existing_user:
+            return jsonify({'error': 'User already exists'}), 409
+        
+        user = {
+            'name': data['name'],
+            'email': data['email'],
+            'password': data['password'],  # TODO: Hash in production!
+            'role': data['role'],
+            'phone': data.get('phone', ''),
+            'company': data.get('company', ''),
+            'createdAt': datetime.utcnow()
+        }
+        
+        result = mongodb.users.insert_one(user)
+        
+        return jsonify({
+            'message': 'User registered successfully',
+            'userId': str(result.inserted_id)
+        }), 201
+    except Exception as e:
+        logger.error(f"Registration error: {e}")
+        return jsonify({'error': str(e)}), 500
 
-# -----------------------------
-# Run App
-# -----------------------------
+@app.route('/api/auth/login', methods=['POST'])
+def login():
+    """User login"""
+    if mongodb is None:
+        return jsonify({"error": "Database not connected"}), 500
+    
+    try:
+        data = request.json
+        email = data.get('email')
+        password = data.get('password')
+        
+        if not email or not password:
+            return jsonify({'error': 'Email and password required'}), 400
+        
+        user = mongodb.users.find_one({'email': email, 'password': password})
+        
+        if not user:
+            return jsonify({'error': 'Invalid credentials'}), 401
+        
+        return jsonify({
+            'message': 'Login successful',
+            'user': {
+                'id': str(user['_id']),
+                'name': user['name'],
+                'email': user['email'],
+                'role': user['role'],
+                'company': user.get('company', '')
+            }
+        }), 200
+    except Exception as e:
+        logger.error(f"Login error: {e}")
+        return jsonify({'error': str(e)}), 500
+
+# ============================================
+# ROUTES - CANDIDATE
+# ============================================
+@app.route('/api/candidate/profile/<user_id>', methods=['GET'])
+def get_candidate_profile(user_id):
+    """Get candidate profile"""
+    if mongodb is None:
+        return jsonify({"error": "Database not connected"}), 500
+    
+    try:
+        user = mongodb.users.find_one({'_id': ObjectId(user_id)})
+        
+        if not user:
+            return jsonify({'error': 'User not found'}), 404
+        
+        user['_id'] = str(user['_id'])
+        return jsonify({'profile': user}), 200
+    except Exception as e:
+        logger.error(f"Profile fetch error: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/candidate/profile/<user_id>', methods=['PUT'])
+def update_candidate_profile(user_id):
+    """Update candidate profile"""
+    if mongodb is None:
+        return jsonify({"error": "Database not connected"}), 500
+    
+    try:
+        data = request.json
+        
+        result = mongodb.users.update_one(
+            {'_id': ObjectId(user_id)},
+            {'$set': data}
+        )
+        
+        if result.modified_count == 0:
+            return jsonify({'error': 'Profile not updated'}), 404
+        
+        return jsonify({'message': 'Profile updated successfully'}), 200
+    except Exception as e:
+        logger.error(f"Profile update error: {e}")
+        return jsonify({'error': str(e)}), 500
+
+# ============================================
+# ROUTES - JOB SEARCH
+# ============================================
+@app.route('/api/jobs/search', methods=['GET'])
+def search_jobs_public():
+    """Public job search"""
+    if mongodb is None:
+        return jsonify({"error": "Database not connected"}), 500
+    
+    try:
+        query = request.args.get('query', '')
+        location = request.args.get('location', '')
+        job_type = request.args.get('type', '')
+        
+        filters = {'status': 'active'}
+        
+        if query:
+            filters['$or'] = [
+                {'title': {'$regex': query, '$options': 'i'}},
+                {'description': {'$regex': query, '$options': 'i'}},
+                {'skills': {'$regex': query, '$options': 'i'}}
+            ]
+        
+        if location:
+            filters['location'] = {'$regex': location, '$options': 'i'}
+        
+        if job_type:
+            filters['type'] = job_type
+        
+        jobs = list(mongodb.jobs.find(filters).sort('createdAt', -1).limit(50))
+        
+        for job in jobs:
+            job['_id'] = str(job['_id'])
+            job['createdAt'] = job['createdAt'].isoformat() if 'createdAt' in job else None
+        
+        return jsonify({'jobs': jobs, 'count': len(jobs)}), 200
+    except Exception as e:
+        logger.error(f"Job search error: {e}")
+        return jsonify({'error': str(e)}), 500
+
+# ============================================
+# ERROR HANDLERS
+# ============================================
+@app.errorhandler(404)
+def not_found(error):
+    return jsonify({'error': 'Endpoint not found'}), 404
+
+@app.errorhandler(500)
+def internal_error(error):
+    return jsonify({'error': 'Internal server error'}), 500
+
+@app.errorhandler(413)
+def request_entity_too_large(error):
+    return jsonify({'error': 'File too large. Max 16MB'}), 413
+
+# ============================================
+# RUN APP
+# ============================================
 if __name__ == '__main__':
-    app.run(debug=True, host='0.0.0.0', port=5000)
+    port = int(os.getenv('PORT', 5000))
+    debug = os.getenv('FLASK_ENV', 'development') == 'development'
+    
+    logger.info(f"🚀 SmartCareer API starting on port {port}")
+    logger.info(f"📊 Database: {DB_NAME}")
+    logger.info(f"🔧 Debug mode: {debug}")
+    logger.info(f"📁 OCR Available: {OCR_AVAILABLE}")
+    
+    app.run(
+        host='0.0.0.0',
+        port=port,
+        debug=debug,
+        threaded=True
+    )
