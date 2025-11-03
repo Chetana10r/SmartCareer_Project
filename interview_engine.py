@@ -15,6 +15,7 @@ import logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+# Create blueprint ONCE at module level
 interview_bp = Blueprint('interview', __name__)
 
 # ---------------------- Lazy Component Init ----------------------
@@ -124,6 +125,11 @@ def start_interview():
         if not questions:
             questions = ["Let's begin with a simple question: Tell me about yourself."]
 
+        # LOG THE GENERATED QUESTIONS
+        logger.info(f"Generated questions for session {session_id}:")
+        for idx, q in enumerate(questions, 1):
+            logger.info(f"Q{idx}: {q}")
+
         # Store session
         active_sessions[session_id] = {
             'session_id': session_id,
@@ -131,7 +137,7 @@ def start_interview():
             'interview_type': interview_type,
             'difficulty': difficulty,
             'duration': duration,
-            'questions': questions,
+            'questions': questions,  # Store the exact questions
             'current_question': 0,
             'answers': [],
             'start_time': datetime.now().isoformat(),
@@ -141,6 +147,8 @@ def start_interview():
 
         # Generate first question audio
         first_question = questions[0]
+        logger.info(f"First question to be sent: {first_question}")
+        
         os.makedirs("static/audio", exist_ok=True)
         audio_filename = f"{session_id}_q1.wav"
         audio_path = os.path.join("static", "audio", audio_filename)
@@ -148,9 +156,10 @@ def start_interview():
         speech.text_to_speech(first_question, audio_path)
         logger.info(f"Interview started: {session_id}")
 
+        # RETURN THE EXACT QUESTION THAT WAS GENERATED
         return jsonify({
             'session_id': session_id,
-            'question': first_question,
+            'question': first_question,  # This should match what's stored
             'audio_url': f'/static/audio/{audio_filename}',
             'total_questions': len(questions),
             'question_number': 1
@@ -170,6 +179,8 @@ def get_next_question():
         session_id = data.get('session_id')
         question_number = int(data.get('question_number', 1))
 
+        logger.info(f"Getting question {question_number} for session {session_id}")
+
         load_sessions()
         if session_id not in active_sessions:
             logger.error(f"Invalid session: {session_id}")
@@ -178,10 +189,15 @@ def get_next_question():
         session = active_sessions[session_id]
         questions = session['questions']
 
+        logger.info(f"Total questions in session: {len(questions)}")
+        logger.info(f"All questions: {questions}")
+
         if question_number > len(questions):
             return jsonify({'message': 'Interview completed'}), 200
 
+        # Get the specific question (index is question_number - 1)
         question = questions[question_number - 1]
+        logger.info(f"Sending question {question_number}: {question}")
 
         os.makedirs("static/audio", exist_ok=True)
         audio_filename = f"{session_id}_q{question_number}.wav"
@@ -189,7 +205,7 @@ def get_next_question():
         speech.text_to_speech(question, audio_path)
 
         return jsonify({
-            'question': question,
+            'question': question,  # Send the exact question from stored list
             'audio_url': f'/static/audio/{audio_filename}',
             'total_questions': len(questions),
             'question_number': question_number
@@ -219,7 +235,10 @@ def submit_answer():
             return jsonify({'error': 'Invalid session or expired'}), 400
 
         session = active_sessions[session_id]
+        
+        # GET THE EXACT QUESTION FROM SESSION
         question = session['questions'][question_number - 1]
+        logger.info(f"Question being evaluated: {question}")
 
         # Save audio
         audio_path = None
@@ -236,7 +255,7 @@ def submit_answer():
             transcript = "No answer provided"
 
         evaluation = evaluator.evaluate_answer(
-            question=question,
+            question=question,  # Use the exact question from session
             answer=transcript,
             job_role=session['job_role'],
             interview_type=session['interview_type']
@@ -249,7 +268,7 @@ def submit_answer():
         # Store answer
         answer_data = {
             'question_number': question_number,
-            'question': question,
+            'question': question,  # Store the exact question that was asked
             'answer': transcript,
             'score': evaluation['score'],
             'feedback': evaluation['feedback'],
@@ -304,4 +323,56 @@ def end_interview():
 
     except Exception as e:
         logger.error(f"Error ending interview: {e}", exc_info=True)
+        return jsonify({'error': str(e)}), 500
+    
+@interview_bp.route('/get_interview_history', methods=['POST'])
+def get_interview_history():
+    """Get interview history for a user"""
+    try:
+        data = request.get_json()
+        user_id = data.get('user_id', 'guest')
+        
+        # TODO: Fetch from your database
+        # For now, return empty history
+        history = []
+        
+        return jsonify({
+            'history': history,
+            'total': len(history)
+        }), 200
+        
+    except Exception as e:
+        logger.error(f"Error fetching interview history: {e}")
+        return jsonify({'error': str(e)}), 500
+    
+# Add this to interview_engine.py for debugging
+
+@interview_bp.route('/debug_session/<session_id>', methods=['GET'])
+def debug_session(session_id):
+    """Debug endpoint to check session data"""
+    try:
+        load_sessions()
+        
+        if session_id not in active_sessions:
+            return jsonify({
+                'error': 'Session not found',
+                'available_sessions': list(active_sessions.keys())
+            }), 404
+        
+        session = active_sessions[session_id]
+        
+        return jsonify({
+            'session_id': session_id,
+            'job_role': session.get('job_role'),
+            'interview_type': session.get('interview_type'),
+            'difficulty': session.get('difficulty'),
+            'current_question': session.get('current_question'),
+            'total_questions': len(session.get('questions', [])),
+            'questions': session.get('questions', []),
+            'answers_count': len(session.get('answers', [])),
+            'status': session.get('status')
+        }), 200
+        
+    except Exception as e:
+        logger.error(f"Error in debug_session: {e}")
         return jsonify({'error': str(e)}), 500

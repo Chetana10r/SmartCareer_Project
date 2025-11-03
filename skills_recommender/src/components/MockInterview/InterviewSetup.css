@@ -2,7 +2,7 @@
 .interview-setup-container {
   min-height: 100vh;
   background: linear-gradient(135deg, #eaf4ff 0%, #f8fdff 100%);
-  padding: 6rem 1rem 5rem; /* keeps space for navbar */
+  padding: 7rem 2rem 3rem; /* increased top padding to push below navbar */
   font-family: "Poppins", "Segoe UI", Tahoma, sans-serif;
   display: flex;
   flex-direction: column;

@@ -1,6 +1,6 @@
 /* ==============================
    RecruiterNavbar Component Scoped Styles
-   (Safe — affects only .recruiter-navbar elements)
+   (Fixed alignment + Centered text/icons)
 ================================*/
 
 .recruiter-navbar {
@@ -28,6 +28,7 @@
 .recruiter-navbar .navbar-brand .brand-link {
   display: flex;
   align-items: center;
+  justify-content: center;
   text-decoration: none;
   color: #fff;
   font-size: 1.3rem;
@@ -36,7 +37,10 @@
 }
 
 .recruiter-navbar .brand-icon {
-  font-size: 1.5rem;
+  font-size: 1.6rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .recruiter-navbar .brand-badge {
@@ -47,22 +51,29 @@
   padding: 0.15rem 0.4rem;
   border-radius: 6px;
   margin-left: 0.3rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 /* Menu Section */
 .recruiter-navbar .navbar-menu {
   display: flex;
+  align-items: center;
+  justify-content: center;
   gap: 1.2rem;
 }
 
 .recruiter-navbar .nav-link {
   display: flex;
   align-items: center;
+  justify-content: center;
   gap: 0.4rem;
   text-decoration: none;
   color: #cbd5e1;
   font-size: 0.95rem;
   transition: color 0.2s ease, transform 0.2s ease;
+  text-align: center;
 }
 
 .recruiter-navbar .nav-link:hover {
@@ -80,6 +91,7 @@
 .recruiter-navbar .navbar-actions {
   display: flex;
   align-items: center;
+  justify-content: center;
   gap: 1rem;
 }
 
@@ -90,6 +102,9 @@
   color: #fff;
   cursor: pointer;
   font-size: 1.3rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .recruiter-navbar .notification-badge {
@@ -102,11 +117,17 @@
   font-weight: bold;
   padding: 0.1rem 0.35rem;
   border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 /* User Menu */
 .recruiter-navbar .user-menu {
   position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .recruiter-navbar .user-btn {
@@ -116,6 +137,7 @@
   cursor: pointer;
   display: flex;
   align-items: center;
+  justify-content: center;
   gap: 0.4rem;
   font-size: 0.95rem;
   padding: 0.3rem 0.5rem;
@@ -137,6 +159,7 @@
   box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
   min-width: 160px;
   z-index: 50;
+  text-align: center;
 }
 
 .recruiter-navbar .user-menu:hover .user-dropdown {
@@ -146,12 +169,14 @@
 .recruiter-navbar .dropdown-item {
   display: flex;
   align-items: center;
+  justify-content: center;
   gap: 0.6rem;
   padding: 0.6rem 1rem;
   color: #e2e8f0;
   text-decoration: none;
   font-size: 0.9rem;
   transition: background 0.2s ease;
+  text-align: center;
 }
 
 .recruiter-navbar .dropdown-item:hover {
@@ -187,6 +212,7 @@
   padding: 0.6rem 0;
   display: flex;
   align-items: center;
+  justify-content: center;
   gap: 0.6rem;
 }
 

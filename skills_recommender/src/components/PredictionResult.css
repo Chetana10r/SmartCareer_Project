@@ -37,9 +37,17 @@
   transition: transform 0.3s ease, box-shadow 0.3s ease;
 }
 
-.stylish-card:hover {
-  transform: scale(1.05);
-  box-shadow: 0 0 20px #00ffaa;
+/* Force all text inside cards to be white */
+.stylish-card * {
+  color: #fff !important;
+}
+
+.stylish-card h3,
+.stylish-card h4,
+.stylish-card p,
+.stylish-card span,
+.stylish-card div {
+  color: #fff;
 }
 
 .dots-container {

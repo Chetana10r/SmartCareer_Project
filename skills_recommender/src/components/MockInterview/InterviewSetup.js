@@ -58,7 +58,7 @@ function InterviewSetup() {
         formData.append('resume', config.resumeFile);
       }
 
-      const response = await fetch('http://127.0.0.1:5000/start_interview', {
+      const response = await fetch('http://127.0.0.1:5000/api/interview/start_interview', {
         method: 'POST',
         body: formData
       });
@@ -68,7 +68,11 @@ function InterviewSetup() {
       }
 
       const data = await response.json();
-      
+
+      // 🧠 Debug logs — confirm backend response
+      console.log('🚀 Interview started with session:', data.session_id);
+      console.log('📝 First question:', data.question);
+
       navigate('/interview-session', { 
         state: { 
           sessionId: data.session_id,
@@ -77,6 +81,7 @@ function InterviewSetup() {
       });
     } catch (err) {
       setError('Failed to start interview: ' + err.message);
+      console.error('❌ Interview start error:', err);
     } finally {
       setLoading(false);
     }
@@ -104,6 +109,7 @@ function InterviewSetup() {
 
       <div className="setup-content">
         <div className="setup-card">
+          {/* Job Details */}
           <div className="card-section">
             <div className="section-header">
               <span className="section-number">1</span>
@@ -131,6 +137,7 @@ function InterviewSetup() {
             </div>
           </div>
 
+          {/* Interview Configuration */}
           <div className="card-section">
             <div className="section-header">
               <span className="section-number">2</span>
@@ -187,6 +194,7 @@ function InterviewSetup() {
             </div>
           </div>
 
+          {/* Resume Upload */}
           <div className="card-section">
             <div className="section-header">
               <span className="section-number">3</span>
@@ -222,6 +230,7 @@ function InterviewSetup() {
             </div>
           </div>
 
+          {/* Features */}
           <div className="features-preview">
             <h3 className="features-title">What to Expect</h3>
             <div className="features-grid">
@@ -248,6 +257,7 @@ function InterviewSetup() {
             </div>
           </div>
 
+          {/* Buttons */}
           <div className="action-section">
             <button
               className="start-button"

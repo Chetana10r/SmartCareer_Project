@@ -33,6 +33,7 @@ logger = logging.getLogger(__name__)
 # ============================================
 app = Flask(__name__)
 
+
 # CORS Configuration
 CORS(app, resources={
     r"/*": {
@@ -258,22 +259,109 @@ def optimize_resume_content(resume_text, job_description):
     }
 
 # ============================================
-# REGISTER BLUEPRINTS
+# REGISTER BLUEPRINTS (Replace this entire section)
 # ============================================
-try:
-    from interview_engine import interview_bp
-    app.register_blueprint(interview_bp, url_prefix='/api/interview')
-    logger.info("✅ Interview blueprint registered")
-except Exception as e:
-    logger.warning(f"⚠️ Interview blueprint error: {e}")
 
-try:
-    from recruiter_engine import recruiter_bp
-    app.register_blueprint(recruiter_bp, url_prefix='/api/recruiter')
-    logger.info("✅ Recruiter blueprint registered")
-except Exception as e:
-    logger.warning(f"⚠️ Recruiter blueprint error: {e}")
+# Flag to prevent double registration
+_BLUEPRINTS_REGISTERED = False
 
+def register_blueprints():
+    """Register all blueprints once"""
+    global _BLUEPRINTS_REGISTERED
+    
+    if _BLUEPRINTS_REGISTERED:
+        logger.info("⚠️ Blueprints already registered, skipping...")
+        return
+    
+    try:
+        from interview_engine import interview_bp
+        app.register_blueprint(interview_bp, url_prefix='/api/interview')
+        logger.info("✅ Interview blueprint registered")
+    except Exception as e:
+        logger.error(f"❌ Interview blueprint error: {e}")
+        import traceback
+        traceback.print_exc()
+
+    try:
+        from recruiter_engine import recruiter_bp
+        app.register_blueprint(recruiter_bp, url_prefix='/api/recruiter')
+        logger.info("✅ Recruiter blueprint registered")
+    except Exception as e:
+        logger.error(f"❌ Recruiter blueprint error: {e}")
+        import traceback
+        traceback.print_exc()
+    
+    _BLUEPRINTS_REGISTERED = True
+
+# Register blueprints
+register_blueprints()
+
+# Add these routes AFTER the blueprint registration section in app.py
+# This provides backward compatibility for old frontend URLs
+
+# ============================================
+# BACKWARD COMPATIBILITY ROUTES (Interview)
+# ============================================
+
+@app.route('/start_interview', methods=['POST'])
+def start_interview_compat():
+    """Backward compatibility route - redirects to blueprint"""
+    from interview_engine import start_interview
+    return start_interview()
+
+@app.route('/get_next_question', methods=['POST'])
+def get_next_question_compat():
+    """Backward compatibility route"""
+    from interview_engine import get_next_question
+    return get_next_question()
+
+@app.route('/submit_answer', methods=['POST'])
+def submit_answer_compat():
+    """Backward compatibility route"""
+    from interview_engine import submit_answer
+    return submit_answer()
+
+@app.route('/end_interview', methods=['POST'])
+def end_interview_compat():
+    """Backward compatibility route"""
+    from interview_engine import end_interview
+    return end_interview()
+
+@app.route('/get_interview_history', methods=['POST'])
+def get_interview_history():
+    """Get interview history for a user"""
+    try:
+        data = request.get_json()
+        user_id = data.get('user_id', 'guest')
+        
+        if mongodb is None:
+            return jsonify({'error': 'Database not available'}), 500
+        
+        # Fetch interview history from completed_sessions or database
+        history = []
+        
+        # Try to get from database if you have an interviews collection
+        try:
+            interviews = list(mongodb.interviews.find(
+                {'user_id': user_id}
+            ).sort('start_time', -1).limit(20))
+            
+            for interview in interviews:
+                interview['_id'] = str(interview['_id'])
+                history.append(interview)
+        except Exception as e:
+            logger.warning(f"Could not fetch interview history: {e}")
+        
+        return jsonify({
+            'history': history,
+            'total': len(history)
+        }), 200
+        
+    except Exception as e:
+        logger.error(f"Error fetching interview history: {e}")
+        return jsonify({'error': str(e)}), 500
+    
+    
 # ============================================
 # ROUTES - HOME & HEALTH
 # ============================================
@@ -602,145 +690,148 @@ def check_ats_score():
         return jsonify({"error": str(e)}), 500
 
 # ============================================
-# ROUTES - MOCK TEST (MONGODB)
+# ROUTES - MOCK TEST (MySQL SINGLE TABLE)
 # ============================================
+from flask import jsonify, request
+import mysql.connector
+from datetime import datetime
+
+def get_mysql_connection():
+    return mysql.connector.connect(
+        host='localhost',
+        user='root',
+        password='fcp@123',  # update this
+        database='smartcareer'
+    )
+
+# ✅ Fetch subjects and difficulties
 @app.route('/api/get_subjects', methods=['GET'])
 def get_subjects():
-    """Get subjects and difficulties"""
     try:
-        if mongodb is None:
-            return jsonify({
-                "subjects": ["Python", "Java", "JavaScript", "Data Science", "SQL"],
-                "difficulties": ["Easy", "Medium", "Hard"]
-            })
-        
-        subjects = mongodb.questions.distinct("subject")
-        difficulties = mongodb.questions.distinct("difficulty")
-        
-        subjects = list(subjects) if subjects else ["Python", "Java", "JavaScript"]
-        difficulties = list(difficulties) if difficulties else ["Easy", "Medium", "Hard"]
-        
+        subjects = ["Python", "SQL", "Machine Learning", "Deep Learning", "Aptitude", "Excel"]
+        difficulties = ["Easy", "Medium", "Hard"]
         return jsonify({"subjects": subjects, "difficulties": difficulties})
     except Exception as e:
-        logger.error(f"Error fetching subjects: {e}")
-        return jsonify({
-            "subjects": ["Python", "Java", "JavaScript"],
-            "difficulties": ["Easy", "Medium", "Hard"]
-        })
+        return jsonify({"error": str(e)}), 500
+
 
 @app.route('/api/get_questions', methods=['POST'])
 def get_questions():
-    """Get 10 random questions"""
+    conn = None
+    cursor = None
     try:
         data = request.get_json()
-        subject = data.get('subject')
-        difficulty = data.get('difficulty', None)
-        
+        subject = data.get("subject")
+        difficulty = data.get("difficulty")
+
         if not subject:
             return jsonify({"error": "Subject required"}), 400
-        
-        if mongodb is None:
-            return jsonify({"error": "Database not connected"}), 500
-        
-        query = {"subject": subject}
+
+        conn = get_mysql_connection()
+        cursor = conn.cursor(dictionary=True)
+
+        query = "SELECT * FROM questions WHERE subject = %s"
+        params = [subject]
+
         if difficulty:
-            query["difficulty"] = difficulty
-        
-        questions = list(mongodb.questions.find(query).limit(10))
-        
+            query += " AND difficulty = %s"
+            params.append(difficulty)
+
+        query += " ORDER BY RAND() LIMIT 10"
+        cursor.execute(query, params)
+        questions = cursor.fetchall()
+
         if not questions:
             return jsonify({"error": "No questions found"}), 404
-        
+
         formatted_questions = []
         for q in questions:
             formatted_questions.append({
-                "id": str(q['_id']),
-                "subject": q.get('subject', ''),
-                "question": q.get('question_text', ''),
+                "id": q["id"],
+                "subject": q["subject"],
+                "question": q["question_text"],
                 "options": {
-                    "A": q.get('option_a', ''),
-                    "B": q.get('option_b', ''),
-                    "C": q.get('option_c', ''),
-                    "D": q.get('option_d', '')
+                    "A": q["option_a"],
+                    "B": q["option_b"],
+                    "C": q["option_c"],
+                    "D": q["option_d"]
                 },
-                "difficulty": q.get('difficulty', 'Medium')
+                "difficulty": q["difficulty"]
             })
-        
+
         return jsonify({
             "questions": formatted_questions,
             "total": len(formatted_questions),
             "time_limit": 600
         })
+
     except Exception as e:
-        logger.error(f"Error getting questions: {e}")
         import traceback
         traceback.print_exc()
         return jsonify({"error": str(e)}), 500
 
+    finally:
+        if cursor:
+            cursor.close()
+        if conn and conn.is_connected():
+            conn.close()
+
+
+
 @app.route('/api/submit_test', methods=['POST'])
 def submit_test():
-    """Submit test"""
+    """Submit test and store results in MySQL"""
     try:
         data = request.get_json()
         user_id = data.get('user_id', 'guest')
         subject = data.get('subject')
         answers = data.get('answers', {})
         time_taken = data.get('time_taken', 0)
-        
+
         if not subject or not answers:
             return jsonify({"error": "Subject and answers required"}), 400
-        
-        if mongodb is None:
-            return jsonify({"error": "Database not connected"}), 500
-        
-        question_ids = [ObjectId(qid) for qid in answers.keys()]
-        questions = list(mongodb.questions.find({'_id': {'$in': question_ids}}))
-        
+
+        conn = get_mysql_connection()
+        cursor = conn.cursor(dictionary=True)
+
+        # Fetch questions from MySQL
+        placeholders = ','.join(['%s'] * len(answers))
+        query = f"SELECT id, question_text, correct_option FROM questions WHERE id IN ({placeholders})"
+        cursor.execute(query, list(answers.keys()))
+        questions = cursor.fetchall()
+
         score = 0
         results = []
-        
+
         for q in questions:
-            q_id = str(q['_id'])
+            q_id = str(q['id'])
             user_answer = answers.get(q_id, '')
-            correct_answer = q.get('correct_option', '')
+            correct_answer = q['correct_option']
             is_correct = user_answer.upper() == correct_answer.upper()
-            
             if is_correct:
                 score += 1
-            
             results.append({
                 "question_id": q_id,
-                "question": q.get('question_text', ''),
-                "options": {
-                    "A": q.get('option_a', ''),
-                    "B": q.get('option_b', ''),
-                    "C": q.get('option_c', ''),
-                    "D": q.get('option_d', '')
-                },
+                "question": q['question_text'],
                 "user_answer": user_answer,
                 "correct_answer": correct_answer,
-                "is_correct": is_correct,
-                "explanation": q.get('explanation', 'No explanation')
+                "is_correct": is_correct
             })
-        
+
         total = len(questions)
         percentage = (score / total * 100) if total > 0 else 0
-        
-        try:
-            test_attempt = {
-                "user_id": user_id,
-                "subject": subject,
-                "score": score,
-                "total_questions": total,
-                "percentage": percentage,
-                "time_taken": time_taken,
-                "results": results,
-                "timestamp": datetime.utcnow()
-            }
-            mongodb.test_attempts.insert_one(test_attempt)
-        except Exception as e:
-            logger.warning(f"Could not store test attempt: {e}")
-        
+
+        # Store test attempt in MySQL
+        insert_query = """
+            INSERT INTO test_attempts (user_id, subject, score, total_questions, percentage, time_taken)
+            VALUES (%s, %s, %s, %s, %s, %s)
+        """
+        cursor.execute(insert_query, (user_id, subject, score, total, percentage, time_taken))
+        conn.commit()
+
+        cursor.close()
+        conn.close()
+
         return jsonify({
             "score": score,
             "total": total,
@@ -749,84 +840,57 @@ def submit_test():
             "time_taken": time_taken,
             "passed": percentage >= 60
         })
+
     except Exception as e:
-        logger.error(f"Error submitting test: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({"error": str(e)}), 500
+    
+@app.route('/api/test_history/<user_id>', methods=['GET'])
+def get_test_history(user_id):
+    """Get test history from MySQL"""
+    try:
+        conn = get_mysql_connection()
+        cursor = conn.cursor(dictionary=True)
+
+        cursor.execute("""
+            SELECT subject, score, total_questions, percentage, time_taken, timestamp
+            FROM test_attempts
+            WHERE user_id = %s
+            ORDER BY timestamp DESC
+            LIMIT 20
+        """, (user_id,))
+        rows = cursor.fetchall()
+
+        history = []
+        for row in rows:
+            history.append({
+                "subject": row["subject"],
+                "score": row["score"],
+                "total_questions": row["total_questions"],
+                "percentage": row["percentage"],
+                "time_taken": row["time_taken"],
+                "timestamp": row["timestamp"].isoformat() if row["timestamp"] else None
+            })
+
+        stats = {
+            "total_tests": len(history),
+            "average_score": round(sum(r["percentage"] for r in history) / len(history), 2) if history else 0,
+            "subjects_attempted": list(set(r["subject"] for r in history))
+        }
+
+        return jsonify({"history": history, "stats": stats})
+
+    except Exception as e:
         import traceback
         traceback.print_exc()
         return jsonify({"error": str(e)}), 500
 
-@app.route('/api/test_history/<user_id>', methods=['GET'])
-def get_test_history(user_id):
-    """Get test history"""
-    try:
-        if mongodb is None:
-            return jsonify({"error": "Database not connected"}), 500
-        
-        history_cursor = mongodb.test_attempts.find(
-            {"user_id": user_id}
-        ).sort("timestamp", -1).limit(20)
-        
-        history = []
-        for h in history_cursor:
-            history.append({
-                "attempt_id": str(h['_id']),
-                "subject": h.get('subject', ''),
-                "score": h.get('score', 0),
-                "total_questions": h.get('total_questions', 0),
-                "percentage": h.get('percentage', 0),
-                "time_taken": h.get('time_taken', 0),
-                "timestamp": h.get('timestamp').isoformat() if h.get('timestamp') else None
-            })
-        
-        if history:
-            total_tests = len(history)
-            avg_score = sum(h['percentage'] for h in history) / total_tests
-            subjects = list(set(h['subject'] for h in history))
-        else:
-            total_tests = 0
-            avg_score = 0
-            subjects = []
-        
-        return jsonify({
-            "history": history,
-            "stats": {
-                "total_tests": total_tests,
-                "average_score": round(avg_score, 2),
-                "subjects_attempted": subjects
-            }
-        })
-    except Exception as e:
-        logger.error(f"Error fetching history: {e}")
-        return jsonify({"error": str(e)}), 500
+    finally:
+        if conn.is_connected():
+            cursor.close()
+            conn.close()
 
-@app.route('/api/test_result/<attempt_id>', methods=['GET'])
-def get_test_result(attempt_id):
-    """Get test result"""
-    try:
-        if mongodb is None:
-            return jsonify({"error": "Database not connected"}), 500
-        
-        result = mongodb.test_attempts.find_one({"_id": ObjectId(attempt_id)})
-        
-        if not result:
-            return jsonify({"error": "Test attempt not found"}), 404
-        
-        formatted_result = {
-            "attempt_id": str(result['_id']),
-            "user_id": result.get('user_id', ''),
-            "subject": result.get('subject', ''),
-            "score": result.get('score', 0),
-            "total_questions": result.get('total_questions', 0),
-            "percentage": result.get('percentage', 0),
-            "time_taken": result.get('time_taken', 0),
-            "results": result.get('results', []),
-            "timestamp": result.get('timestamp').isoformat() if result.get('timestamp') else None
-        }
-        
-        return jsonify(formatted_result)
-    except Exception as e:
-        logger.error(f"Error fetching result: {e}")
-        return jsonify({"error": str(e)}), 500
 
 # ============================================
 # ROUTES - AUTH
@@ -903,103 +967,335 @@ def login():
         return jsonify({'error': str(e)}), 500
 
 # ============================================
-# ROUTES - CANDIDATE
+# ROUTES - RECRUITER
 # ============================================
-@app.route('/api/candidate/profile/<user_id>', methods=['GET'])
-def get_candidate_profile(user_id):
-    """Get candidate profile"""
-    if mongodb is None:
-        return jsonify({"error": "Database not connected"}), 500
-    
-    try:
-        user = mongodb.users.find_one({'_id': ObjectId(user_id)})
-        
-        if not user:
-            return jsonify({'error': 'User not found'}), 404
-        
-        user['_id'] = str(user['_id'])
-        return jsonify({'profile': user}), 200
-    except Exception as e:
-        logger.error(f"Profile fetch error: {e}")
-        return jsonify({'error': str(e)}), 500
 
-@app.route('/api/candidate/profile/<user_id>', methods=['PUT'])
-def update_candidate_profile(user_id):
-    """Update candidate profile"""
+@app.route('/api/recruiter/post-job', methods=['POST'])
+def post_job():
+    """Post a new job"""
     if mongodb is None:
         return jsonify({"error": "Database not connected"}), 500
     
     try:
         data = request.json
         
-        result = mongodb.users.update_one(
-            {'_id': ObjectId(user_id)},
-            {'$set': data}
-        )
+        # Validate required fields
+        required_fields = ['title', 'company', 'location', 'type', 'description', 'requirements', 'recruiterId']
+        for field in required_fields:
+            if field not in data:
+                return jsonify({'error': f'Missing required field: {field}'}), 400
         
-        if result.modified_count == 0:
-            return jsonify({'error': 'Profile not updated'}), 404
+        # Create job document
+        job = {
+            'title': data['title'],
+            'company': data['company'],
+            'location': data['location'],
+            'type': data['type'],
+            'experience': data.get('experience', ''),
+            'salary': data.get('salary', ''),
+            'description': data['description'],
+            'requirements': data['requirements'],
+            'skills': data.get('skills', []),
+            'recruiterId': data['recruiterId'],
+            'status': 'active',
+            'applicants': [],
+            'createdAt': datetime.utcnow(),
+            'updatedAt': datetime.utcnow()
+        }
         
-        return jsonify({'message': 'Profile updated successfully'}), 200
+        result = mongodb.jobs.insert_one(job)
+        job['_id'] = str(result.inserted_id)
+        job['createdAt'] = job['createdAt'].isoformat()
+        job['updatedAt'] = job['updatedAt'].isoformat()
+        
+        return jsonify({
+            'message': 'Job posted successfully',
+            'job': job
+        }), 201
+        
     except Exception as e:
-        logger.error(f"Profile update error: {e}")
+        logger.error(f"Job posting error: {e}")
         return jsonify({'error': str(e)}), 500
 
-# ============================================
-# ROUTES - JOB SEARCH
-# ============================================
-@app.route('/api/jobs/search', methods=['GET'])
-def search_jobs_public():
-    """Public job search"""
+
+@app.route('/api/recruiter/jobs/<recruiter_id>', methods=['GET'])
+def get_recruiter_jobs(recruiter_id):
+    """Get all jobs posted by a recruiter"""
     if mongodb is None:
         return jsonify({"error": "Database not connected"}), 500
     
     try:
-        query = request.args.get('query', '')
-        location = request.args.get('location', '')
-        job_type = request.args.get('type', '')
-        
-        filters = {'status': 'active'}
-        
-        if query:
-            filters['$or'] = [
-                {'title': {'$regex': query, '$options': 'i'}},
-                {'description': {'$regex': query, '$options': 'i'}},
-                {'skills': {'$regex': query, '$options': 'i'}}
-            ]
-        
-        if location:
-            filters['location'] = {'$regex': location, '$options': 'i'}
-        
-        if job_type:
-            filters['type'] = job_type
-        
-        jobs = list(mongodb.jobs.find(filters).sort('createdAt', -1).limit(50))
+        jobs = list(mongodb.jobs.find({'recruiterId': recruiter_id}).sort('createdAt', -1))
         
         for job in jobs:
             job['_id'] = str(job['_id'])
             job['createdAt'] = job['createdAt'].isoformat() if 'createdAt' in job else None
+            job['updatedAt'] = job['updatedAt'].isoformat() if 'updatedAt' in job else None
+            job['applicantCount'] = len(job.get('applicants', []))
         
         return jsonify({'jobs': jobs, 'count': len(jobs)}), 200
+        
     except Exception as e:
-        logger.error(f"Job search error: {e}")
+        logger.error(f"Get recruiter jobs error: {e}")
         return jsonify({'error': str(e)}), 500
 
-# ============================================
-# ERROR HANDLERS
-# ============================================
-@app.errorhandler(404)
-def not_found(error):
-    return jsonify({'error': 'Endpoint not found'}), 404
 
-@app.errorhandler(500)
-def internal_error(error):
-    return jsonify({'error': 'Internal server error'}), 500
+@app.route('/api/recruiter/job/<job_id>', methods=['GET'])
+def get_job_details(job_id):
+    """Get job details by ID"""
+    if mongodb is None:
+        return jsonify({"error": "Database not connected"}), 500
+    
+    try:
+        job = mongodb.jobs.find_one({'_id': ObjectId(job_id)})
+        
+        if not job:
+            return jsonify({'error': 'Job not found'}), 404
+        
+        job['_id'] = str(job['_id'])
+        job['createdAt'] = job['createdAt'].isoformat() if 'createdAt' in job else None
+        job['updatedAt'] = job['updatedAt'].isoformat() if 'updatedAt' in job else None
+        job['applicantCount'] = len(job.get('applicants', []))
+        
+        return jsonify({'job': job}), 200
+        
+    except Exception as e:
+        logger.error(f"Get job details error: {e}")
+        return jsonify({'error': str(e)}), 500
 
-@app.errorhandler(413)
-def request_entity_too_large(error):
-    return jsonify({'error': 'File too large. Max 16MB'}), 413
 
+@app.route('/api/recruiter/job/<job_id>', methods=['PUT'])
+def update_job(job_id):
+    """Update job details"""
+    if mongodb is None:
+        return jsonify({"error": "Database not connected"}), 500
+    
+    try:
+        data = request.json
+        data['updatedAt'] = datetime.utcnow()
+        
+        result = mongodb.jobs.update_one(
+            {'_id': ObjectId(job_id)},
+            {'$set': data}
+        )
+        
+        if result.matched_count == 0:
+            return jsonify({'error': 'Job not found'}), 404
+        
+        return jsonify({'message': 'Job updated successfully'}), 200
+        
+    except Exception as e:
+        logger.error(f"Update job error: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/recruiter/job/<job_id>', methods=['DELETE'])
+def delete_job(job_id):
+    """Delete a job"""
+    if mongodb is None:
+        return jsonify({"error": "Database not connected"}), 500
+    
+    try:
+        result = mongodb.jobs.delete_one({'_id': ObjectId(job_id)})
+        
+        if result.deleted_count == 0:
+            return jsonify({'error': 'Job not found'}), 404
+        
+        return jsonify({'message': 'Job deleted successfully'}), 200
+        
+    except Exception as e:
+        logger.error(f"Delete job error: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/recruiter/search-candidates', methods=['GET'])
+def search_candidates():
+    """Search candidates by skills and experience"""
+    if mongodb is None:
+        return jsonify({"error": "Database not connected"}), 500
+    
+    try:
+        skills = request.args.get('skills', '')
+        experience = request.args.get('experience', '')
+        location = request.args.get('location', '')
+        
+        filters = {'role': 'candidate'}
+        
+        if skills:
+            filters['skills'] = {'$regex': skills, '$options': 'i'}
+        
+        if experience:
+            filters['experience'] = {'$regex': experience, '$options': 'i'}
+        
+        if location:
+            filters['location'] = {'$regex': location, '$options': 'i'}
+        
+        candidates = list(mongodb.users.find(filters).limit(50))
+        
+        for candidate in candidates:
+            candidate['_id'] = str(candidate['_id'])
+            # Remove sensitive information
+            candidate.pop('password', None)
+        
+        return jsonify({'candidates': candidates, 'count': len(candidates)}), 200
+        
+    except Exception as e:
+        logger.error(f"Search candidates error: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/recruiter/match-resume', methods=['POST'])
+def match_resume():
+    """Match resume with job description"""
+    if mongodb is None:
+        return jsonify({"error": "Database not connected"}), 500
+    
+    try:
+        data = request.json
+        job_description = data.get('jobDescription', '')
+        resume_text = data.get('resumeText', '')
+        
+        if not job_description or not resume_text:
+            return jsonify({'error': 'Job description and resume text required'}), 400
+        
+        # Simple keyword matching (you can enhance this with NLP)
+        job_keywords = set(job_description.lower().split())
+        resume_keywords = set(resume_text.lower().split())
+        
+        matching_keywords = job_keywords.intersection(resume_keywords)
+        match_percentage = (len(matching_keywords) / len(job_keywords)) * 100 if job_keywords else 0
+        
+        return jsonify({
+            'matchPercentage': round(match_percentage, 2),
+            'matchingKeywords': list(matching_keywords)[:10],
+            'feedback': 'Good match' if match_percentage > 60 else 'Moderate match' if match_percentage > 30 else 'Low match'
+        }), 200
+        
+    except Exception as e:
+        logger.error(f"Resume matching error: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/recruiter/shortlist', methods=['POST'])
+def add_to_shortlist():
+    """Add candidate to shortlist"""
+    if mongodb is None:
+        return jsonify({"error": "Database not connected"}), 500
+    
+    try:
+        data = request.json
+        
+        shortlist = {
+            'candidateId': data['candidateId'],
+            'jobId': data['jobId'],
+            'recruiterId': data['recruiterId'],
+            'status': data.get('status', 'shortlisted'),
+            'notes': data.get('notes', ''),
+            'createdAt': datetime.utcnow()
+        }
+        
+        result = mongodb.shortlist.insert_one(shortlist)
+        shortlist['_id'] = str(result.inserted_id)
+        shortlist['createdAt'] = shortlist['createdAt'].isoformat()
+        
+        return jsonify({
+            'message': 'Candidate added to shortlist',
+            'shortlist': shortlist
+        }), 201
+        
+    except Exception as e:
+        logger.error(f"Add to shortlist error: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/recruiter/shortlist/<recruiter_id>', methods=['GET'])
+def get_shortlist(recruiter_id):
+    """Get recruiter's shortlisted candidates"""
+    if mongodb is None:
+        return jsonify({"error": "Database not connected"}), 500
+    
+    try:
+        shortlist = list(mongodb.shortlist.find({'recruiterId': recruiter_id}).sort('createdAt', -1))
+        
+        # Populate candidate and job details
+        for item in shortlist:
+            item['_id'] = str(item['_id'])
+            item['createdAt'] = item['createdAt'].isoformat() if 'createdAt' in item else None
+            
+            # Get candidate details
+            candidate = mongodb.users.find_one({'_id': ObjectId(item['candidateId'])})
+            if candidate:
+                candidate.pop('password', None)
+                candidate['_id'] = str(candidate['_id'])
+                item['candidate'] = candidate
+            
+            # Get job details
+            job = mongodb.jobs.find_one({'_id': ObjectId(item['jobId'])})
+            if job:
+                job['_id'] = str(job['_id'])
+                item['job'] = job
+        
+        return jsonify({'shortlist': shortlist, 'count': len(shortlist)}), 200
+        
+    except Exception as e:
+        logger.error(f"Get shortlist error: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/recruiter/shortlist/<shortlist_id>', methods=['DELETE'])
+def remove_from_shortlist(shortlist_id):
+    """Remove candidate from shortlist"""
+    if mongodb is None:
+        return jsonify({"error": "Database not connected"}), 500
+    
+    try:
+        result = mongodb.shortlist.delete_one({'_id': ObjectId(shortlist_id)})
+        
+        if result.deleted_count == 0:
+            return jsonify({'error': 'Shortlist entry not found'}), 404
+        
+        return jsonify({'message': 'Removed from shortlist'}), 200
+        
+    except Exception as e:
+        logger.error(f"Remove from shortlist error: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/recruiter/dashboard/<recruiter_id>', methods=['GET'])
+def get_recruiter_dashboard(recruiter_id):
+    """Get recruiter dashboard statistics"""
+    if mongodb is None:
+        return jsonify({"error": "Database not connected"}), 500
+    
+    try:
+        # Get counts
+        total_jobs = mongodb.jobs.count_documents({'recruiterId': recruiter_id})
+        active_jobs = mongodb.jobs.count_documents({'recruiterId': recruiter_id, 'status': 'active'})
+        total_shortlisted = mongodb.shortlist.count_documents({'recruiterId': recruiter_id})
+        
+        # Get recent jobs
+        recent_jobs = list(mongodb.jobs.find({'recruiterId': recruiter_id})
+                          .sort('createdAt', -1)
+                          .limit(5))
+        
+        for job in recent_jobs:
+            job['_id'] = str(job['_id'])
+            job['createdAt'] = job['createdAt'].isoformat() if 'createdAt' in job else None
+            job['applicantCount'] = len(job.get('applicants', []))
+        
+        return jsonify({
+            'stats': {
+                'totalJobs': total_jobs,
+                'activeJobs': active_jobs,
+                'totalShortlisted': total_shortlisted
+            },
+            'recentJobs': recent_jobs
+        }), 200
+        
+    except Exception as e:
+        logger.error(f"Dashboard error: {e}")
+        return jsonify({'error': str(e)}), 500
+    
 # ============================================
 # RUN APP
 # ============================================
@@ -1012,9 +1308,11 @@ if __name__ == '__main__':
     logger.info(f"🔧 Debug mode: {debug}")
     logger.info(f"📁 OCR Available: {OCR_AVAILABLE}")
     
+    # Disable reloader to prevent double registration
     app.run(
         host='0.0.0.0',
         port=port,
         debug=debug,
-        threaded=True
+        threaded=True,
+        use_reloader=False  # This prevents the double registration issue
     )

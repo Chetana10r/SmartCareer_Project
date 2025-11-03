@@ -1,9 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { 
-  LineChart, Line, BarChart, Bar, RadarChart, Radar, 
+import {
+  LineChart, Line, BarChart, Bar, RadarChart, Radar,
   PolarGrid, PolarAngleAxis, PolarRadiusAxis,
-  XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer 
+  XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer
 } from 'recharts';
 import './InterviewFeedback.css';
 
@@ -15,23 +15,10 @@ function InterviewFeedback() {
   const [feedbackData, setFeedbackData] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    if (!sessionId) {
-      navigate('/mock-interview');
-      return;
-    }
-
-    if (results) {
-      setFeedbackData(results);
-      setLoading(false);
-    } else {
-      fetchFeedback();
-    }
-  }, [sessionId, navigate, results]);
-
-  const fetchFeedback = async () => {
+  // ✅ Wrapped fetchFeedback inside useCallback
+  const fetchFeedback = useCallback(async () => {
     try {
-      const response = await fetch('http://127.0.0.1:5000/get_feedback', {
+      const response = await fetch('http://127.0.0.1:5000/api/interview/get_feedback', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ session_id: sessionId })
@@ -54,8 +41,23 @@ function InterviewFeedback() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [sessionId]);
 
+  useEffect(() => {
+    if (!sessionId) {
+      navigate('/mock-interview');
+      return;
+    }
+
+    if (results) {
+      setFeedbackData(results);
+      setLoading(false);
+    } else {
+      fetchFeedback();
+    }
+  }, [sessionId, navigate, results, fetchFeedback]); // ✅ All dependencies included
+
+  // Helper functions
   const getScoreColor = (score) => {
     if (score >= 8) return '#42e695';
     if (score >= 6) return '#ffc107';
@@ -119,7 +121,7 @@ function InterviewFeedback() {
     { subject: 'Problem Solving', score: soft_skills?.problem_solving || 7, fullMark: 10 }
   ];
 
-  const questionScoresData = question_scores?.length > 0 
+  const questionScoresData = question_scores?.length > 0
     ? question_scores.map((score, idx) => ({
         question: `Q${idx + 1}`,
         score: score
@@ -154,62 +156,34 @@ function InterviewFeedback() {
           <div className="score-max">/ 10</div>
           <div className="score-label">{getScoreLabel(overall_score)}</div>
         </div>
-        
+
         <div className="score-details">
-          <div className="score-item">
-            <span className="score-icon">💪</span>
-            <div className="score-info">
-              <span className="score-name">Confidence</span>
-              <span className="score-number">{confidence_score.toFixed(1)}/10</span>
+          {[
+            { icon: '💪', name: 'Confidence', value: confidence_score },
+            { icon: '💬', name: 'Communication', value: clarity_score },
+            { icon: '🎯', name: 'Technical Skills', value: technical_score }
+          ].map((item, index) => (
+            <div key={index} className="score-item">
+              <span className="score-icon">{item.icon}</span>
+              <div className="score-info">
+                <span className="score-name">{item.name}</span>
+                <span className="score-number">{item.value.toFixed(1)}/10</span>
+              </div>
+              <div className="score-bar">
+                <div
+                  className="score-bar-fill"
+                  style={{
+                    width: `${item.value * 10}%`,
+                    background: getScoreColor(item.value)
+                  }}
+                />
+              </div>
             </div>
-            <div className="score-bar">
-              <div 
-                className="score-bar-fill" 
-                style={{ 
-                  width: `${confidence_score * 10}%`,
-                  background: getScoreColor(confidence_score)
-                }}
-              />
-            </div>
-          </div>
-
-          <div className="score-item">
-            <span className="score-icon">💬</span>
-            <div className="score-info">
-              <span className="score-name">Communication</span>
-              <span className="score-number">{clarity_score.toFixed(1)}/10</span>
-            </div>
-            <div className="score-bar">
-              <div 
-                className="score-bar-fill" 
-                style={{ 
-                  width: `${clarity_score * 10}%`,
-                  background: getScoreColor(clarity_score)
-                }}
-              />
-            </div>
-          </div>
-
-          <div className="score-item">
-            <span className="score-icon">🎯</span>
-            <div className="score-info">
-              <span className="score-name">Technical Skills</span>
-              <span className="score-number">{technical_score.toFixed(1)}/10</span>
-            </div>
-            <div className="score-bar">
-              <div 
-                className="score-bar-fill" 
-                style={{ 
-                  width: `${technical_score * 10}%`,
-                  background: getScoreColor(technical_score)
-                }}
-              />
-            </div>
-          </div>
+          ))}
         </div>
       </div>
 
-      {/* Charts Section with Recharts */}
+      {/* Charts Section */}
       <div className="charts-section">
         <div className="chart-card">
           <h3 className="chart-title">📈 Skills Breakdown</h3>
@@ -218,7 +192,7 @@ function InterviewFeedback() {
               <CartesianGrid strokeDasharray="3 3" />
               <XAxis dataKey="skill" />
               <YAxis domain={[0, 10]} />
-              <Tooltip 
+              <Tooltip
                 contentStyle={{ background: '#fff', border: '1px solid #ccc' }}
                 formatter={(value) => value.toFixed(1)}
               />
@@ -234,14 +208,14 @@ function InterviewFeedback() {
               <PolarGrid />
               <PolarAngleAxis dataKey="subject" />
               <PolarRadiusAxis domain={[0, 10]} />
-              <Radar 
-                name="Your Score" 
-                dataKey="score" 
-                stroke="#667eea" 
-                fill="#667eea" 
-                fillOpacity={0.6} 
+              <Radar
+                name="Your Score"
+                dataKey="score"
+                stroke="#667eea"
+                fill="#667eea"
+                fillOpacity={0.6}
               />
-              <Tooltip 
+              <Tooltip
                 contentStyle={{ background: '#fff', border: '1px solid #ccc' }}
                 formatter={(value) => value.toFixed(1)}
               />
@@ -250,6 +224,7 @@ function InterviewFeedback() {
         </div>
       </div>
 
+      {/* Question-wise Chart */}
       {questionScoresData.length > 0 && (
         <div className="chart-card full-width">
           <h3 className="chart-title">📊 Question-wise Performance</h3>
@@ -258,16 +233,16 @@ function InterviewFeedback() {
               <CartesianGrid strokeDasharray="3 3" />
               <XAxis dataKey="question" />
               <YAxis domain={[0, 10]} />
-              <Tooltip 
+              <Tooltip
                 contentStyle={{ background: '#fff', border: '1px solid #ccc' }}
                 formatter={(value) => value.toFixed(1)}
               />
               <Legend />
-              <Line 
-                type="monotone" 
-                dataKey="score" 
-                stroke="#42e695" 
-                strokeWidth={3} 
+              <Line
+                type="monotone"
+                dataKey="score"
+                stroke="#42e695"
+                strokeWidth={3}
                 dot={{ r: 6, fill: '#42e695' }}
                 activeDot={{ r: 8 }}
               />
@@ -279,76 +254,31 @@ function InterviewFeedback() {
       {/* Strengths & Weaknesses */}
       <div className="insights-section">
         <div className="insight-card strengths">
-          <h3 className="insight-title">
-            <span className="insight-icon">✅</span>
-            Key Strengths
-          </h3>
+          <h3 className="insight-title"><span className="insight-icon">✅</span> Key Strengths</h3>
           <ul className="insight-list">
             {(strengths.length > 0 ? strengths : [
               'Clear communication and articulation',
               'Good technical understanding',
               'Structured approach to problem-solving'
-            ]).map((strength, idx) => (
-              <li key={idx}>{strength}</li>
-            ))}
+            ]).map((strength, idx) => <li key={idx}>{strength}</li>)}
           </ul>
         </div>
 
         <div className="insight-card weaknesses">
-          <h3 className="insight-title">
-            <span className="insight-icon">⚠️</span>
-            Areas for Improvement
-          </h3>
+          <h3 className="insight-title"><span className="insight-icon">⚠️</span> Areas for Improvement</h3>
           <ul className="insight-list">
             {(weaknesses.length > 0 ? weaknesses : [
               'Add more real-world examples',
               'Reduce filler words (um, uh)',
               'Provide more detailed explanations'
-            ]).map((weakness, idx) => (
-              <li key={idx}>{weakness}</li>
-            ))}
+            ]).map((weakness, idx) => <li key={idx}>{weakness}</li>)}
           </ul>
         </div>
       </div>
 
-      {/* Question-wise Feedback */}
-      {questions_feedback && questions_feedback.length > 0 && (
-        <div className="questions-feedback-section">
-          <h3 className="section-title">
-            <span className="section-icon">💬</span>
-            Detailed Question Analysis
-          </h3>
-          {questions_feedback.map((qf, idx) => (
-            <div key={idx} className="question-feedback-card">
-              <div className="question-header">
-                <span className="question-number">Question {idx + 1}</span>
-                <span 
-                  className="question-score"
-                  style={{ color: getScoreColor(qf.score) }}
-                >
-                  {qf.score?.toFixed(1)}/10
-                </span>
-              </div>
-              <div className="question-text">{qf.question}</div>
-              <div className="answer-section">
-                <strong>Your Answer:</strong>
-                <p>{qf.answer || 'No answer recorded'}</p>
-              </div>
-              <div className="feedback-section">
-                <strong>💡 Feedback:</strong>
-                <p>{qf.feedback}</p>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-
       {/* Recommendations */}
       <div className="recommendations-section">
-        <h3 className="section-title">
-          <span className="section-icon">💡</span>
-          Personalized Recommendations
-        </h3>
+        <h3 className="section-title"><span className="section-icon">💡</span> Personalized Recommendations</h3>
         <div className="recommendations-grid">
           {(recommendations.length > 0 ? recommendations : [
             {
@@ -375,11 +305,7 @@ function InterviewFeedback() {
               <div className="rec-content">
                 <h4>{rec.title}</h4>
                 <p>{rec.description}</p>
-                {rec.link && (
-                  <a href={rec.link} target="_blank" rel="noopener noreferrer" className="rec-link">
-                    Learn More →
-                  </a>
-                )}
+                {rec.link && <a href={rec.link} target="_blank" rel="noopener noreferrer" className="rec-link">Learn More →</a>}
               </div>
             </div>
           ))}
@@ -388,28 +314,14 @@ function InterviewFeedback() {
 
       {/* Action Buttons */}
       <div className="action-section">
-        <button 
-          className="primary-button"
-          onClick={() => navigate('/mock-interview')}
-        >
-          <span className="button-icon">🔄</span>
-          <span>Take Another Interview</span>
+        <button className="primary-button" onClick={() => navigate('/mock-interview')}>
+          <span className="button-icon">🔄</span> Take Another Interview
         </button>
-        
-        <button 
-          className="secondary-button"
-          onClick={() => navigate('/interview-history')}
-        >
-          <span className="button-icon">📜</span>
-          <span>View History</span>
+        <button className="secondary-button" onClick={() => navigate('/interview-history')}>
+          <span className="button-icon">📜</span> View History
         </button>
-
-        <button 
-          className="download-button"
-          onClick={() => window.print()}
-        >
-          <span className="button-icon">📥</span>
-          <span>Download Report</span>
+        <button className="download-button" onClick={() => window.print()}>
+          <span className="button-icon">📥</span> Download Report
         </button>
       </div>
     </div>

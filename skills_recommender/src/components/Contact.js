@@ -103,7 +103,7 @@ function Contact() {
 
 const styles = {
   container: {
-    padding: "3rem 2rem",
+    padding: "6rem 2rem 3rem",
     minHeight: "100vh",
     fontFamily: "'Segoe UI', sans-serif",
     background: "linear-gradient(to right, #1c92d2, #f2fcfe)",

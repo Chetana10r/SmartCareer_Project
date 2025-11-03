@@ -1,22 +1,78 @@
-from flask import Blueprint, request, jsonify
+from flask import Blueprint, request, jsonify, current_app
 from datetime import datetime
 from bson import ObjectId
 import os
+import logging
 from werkzeug.utils import secure_filename
-from resume_matcher import ResumeMatcher
-from candidate_ranker import CandidateRanker
-from job_manager import JobManager
-from candidate_parser import CandidateParser
-from email_notifier import EmailNotifier
 
+# Import your custom modules (make sure they exist)
+try:
+    from resume_matcher import ResumeMatcher
+    from candidate_ranker import CandidateRanker
+    from job_manager import JobManager
+    from candidate_parser import CandidateParser
+    from email_notifier import EmailNotifier
+except ImportError as e:
+    logging.warning(f"Some modules not found: {e}")
+    # Create dummy classes if imports fail
+    class ResumeMatcher:
+        def match_candidates_to_job(self, job, candidates): return []
+        def calculate_match_score(self, resume, job): return 0
+    
+    class CandidateRanker:
+        def rank_candidates(self, matches): return matches
+    
+    class JobManager:
+        def __init__(self): 
+            self.db = None
+        def create_job(self, data): return "dummy_id"
+        def get_jobs_by_recruiter(self, recruiter_id): return []
+        def get_job_by_id(self, job_id): return None
+        def update_job(self, job_id, data): return False
+        def delete_job(self, job_id): return False
+        def add_to_shortlist(self, data): return "dummy_id"
+        def get_shortlisted_candidates(self, job_id): return []
+        def remove_from_shortlist(self, shortlist_id): return False
+        def update_shortlist_status(self, shortlist_id, status): return False
+        def count_jobs_by_recruiter(self, recruiter_id): return 0
+        def count_active_jobs(self, recruiter_id): return 0
+        def count_shortlisted_candidates(self, recruiter_id): return 0
+        def get_recent_activity(self, recruiter_id): return []
+    
+    class CandidateParser:
+        def parse_resume(self, filepath): return {}
+    
+    class EmailNotifier:
+        def send_shortlist_email(self, candidate, job): pass
+
+logger = logging.getLogger(__name__)
+
+# Create blueprint ONCE at module level
 recruiter_bp = Blueprint('recruiter', __name__)
 
-# Initialize components
-job_manager = JobManager()
-resume_matcher = ResumeMatcher()
-candidate_ranker = CandidateRanker()
-candidate_parser = CandidateParser()
-email_notifier = EmailNotifier()
+# Initialize components (lazy loading)
+_job_manager = None
+_resume_matcher = None
+_candidate_ranker = None
+_candidate_parser = None
+_email_notifier = None
+
+def get_components():
+    """Lazy initialize components"""
+    global _job_manager, _resume_matcher, _candidate_ranker, _candidate_parser, _email_notifier
+    
+    if _job_manager is None:
+        _job_manager = JobManager()
+    if _resume_matcher is None:
+        _resume_matcher = ResumeMatcher()
+    if _candidate_ranker is None:
+        _candidate_ranker = CandidateRanker()
+    if _candidate_parser is None:
+        _candidate_parser = CandidateParser()
+    if _email_notifier is None:
+        _email_notifier = EmailNotifier()
+    
+    return _job_manager, _resume_matcher, _candidate_ranker, _candidate_parser, _email_notifier
 
 UPLOAD_FOLDER = 'uploads/resumes'
 ALLOWED_EXTENSIONS = {'pdf', 'docx', 'doc'}
@@ -26,13 +82,25 @@ os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
+def get_db():
+    """Safely get database connection"""
+    try:
+        db = current_app.config.get('db')
+        if db is None:
+            logger.warning("Database connection not initialized")
+            return None
+        return db
+    except RuntimeError:
+        logger.error("Working outside application context")
+        return None
 
 # ============ JOB POSTING ROUTES ============
 
-@recruiter_bp.route('/api/recruiter/jobs', methods=['POST'])
+@recruiter_bp.route('/jobs', methods=['POST'])
 def create_job():
     """Create a new job posting"""
     try:
+        job_manager, _, _, _, _ = get_components()
         data = request.json
         
         # Validate required fields
@@ -50,13 +118,15 @@ def create_job():
         }), 201
         
     except Exception as e:
+        logger.error(f"Error creating job: {e}")
         return jsonify({'error': str(e)}), 500
 
 
-@recruiter_bp.route('/api/recruiter/jobs', methods=['GET'])
+@recruiter_bp.route('/jobs', methods=['GET'])
 def get_jobs():
     """Get all jobs for a recruiter"""
     try:
+        job_manager, _, _, _, _ = get_components()
         recruiter_id = request.args.get('recruiterId')
         
         if not recruiter_id:
@@ -70,13 +140,15 @@ def get_jobs():
         }), 200
         
     except Exception as e:
+        logger.error(f"Error getting jobs: {e}")
         return jsonify({'error': str(e)}), 500
 
 
-@recruiter_bp.route('/api/recruiter/jobs/<job_id>', methods=['GET'])
+@recruiter_bp.route('/jobs/<job_id>', methods=['GET'])
 def get_job(job_id):
     """Get a specific job by ID"""
     try:
+        job_manager, _, _, _, _ = get_components()
         job = job_manager.get_job_by_id(job_id)
         
         if not job:
@@ -85,13 +157,15 @@ def get_job(job_id):
         return jsonify({'job': job}), 200
         
     except Exception as e:
+        logger.error(f"Error getting job: {e}")
         return jsonify({'error': str(e)}), 500
 
 
-@recruiter_bp.route('/api/recruiter/jobs/<job_id>', methods=['PUT'])
+@recruiter_bp.route('/jobs/<job_id>', methods=['PUT'])
 def update_job(job_id):
     """Update a job posting"""
     try:
+        job_manager, _, _, _, _ = get_components()
         data = request.json
         
         success = job_manager.update_job(job_id, data)
@@ -102,13 +176,15 @@ def update_job(job_id):
         return jsonify({'message': 'Job updated successfully'}), 200
         
     except Exception as e:
+        logger.error(f"Error updating job: {e}")
         return jsonify({'error': str(e)}), 500
 
 
-@recruiter_bp.route('/api/recruiter/jobs/<job_id>', methods=['DELETE'])
+@recruiter_bp.route('/jobs/<job_id>', methods=['DELETE'])
 def delete_job(job_id):
     """Delete a job posting"""
     try:
+        job_manager, _, _, _, _ = get_components()
         success = job_manager.delete_job(job_id)
         
         if not success:
@@ -117,19 +193,24 @@ def delete_job(job_id):
         return jsonify({'message': 'Job deleted successfully'}), 200
         
     except Exception as e:
+        logger.error(f"Error deleting job: {e}")
         return jsonify({'error': str(e)}), 500
 
 
 # ============ CANDIDATE SEARCH ROUTES ============
 
-@recruiter_bp.route('/api/recruiter/candidates/search', methods=['POST'])
+@recruiter_bp.route('/candidates/search', methods=['POST'])
 def search_candidates():
     """Search candidates based on filters"""
     try:
+        db = get_db()
+        if not db:
+            return jsonify({'error': 'Database not available'}), 500
+        
         filters = request.json
         
-        # Get all candidates (you'll need to implement this based on your DB)
-        candidates = get_all_candidates_from_db()
+        # Get all candidates
+        candidates = get_all_candidates_from_db(db)
         
         # Apply filters
         filtered_candidates = apply_filters(candidates, filters)
@@ -140,15 +221,19 @@ def search_candidates():
         }), 200
         
     except Exception as e:
+        logger.error(f"Error searching candidates: {e}")
         return jsonify({'error': str(e)}), 500
 
 
-@recruiter_bp.route('/api/recruiter/candidates/<candidate_id>', methods=['GET'])
+@recruiter_bp.route('/candidates/<candidate_id>', methods=['GET'])
 def get_candidate_details(candidate_id):
     """Get detailed candidate profile"""
     try:
-        # Fetch from your users/candidates database
-        candidate = get_candidate_from_db(candidate_id)
+        db = get_db()
+        if not db:
+            return jsonify({'error': 'Database not available'}), 500
+        
+        candidate = get_candidate_from_db(db, candidate_id)
         
         if not candidate:
             return jsonify({'error': 'Candidate not found'}), 404
@@ -156,15 +241,21 @@ def get_candidate_details(candidate_id):
         return jsonify({'candidate': candidate}), 200
         
     except Exception as e:
+        logger.error(f"Error getting candidate: {e}")
         return jsonify({'error': str(e)}), 500
 
 
 # ============ RESUME MATCHING ROUTES ============
 
-@recruiter_bp.route('/api/recruiter/match-resumes', methods=['POST'])
+@recruiter_bp.route('/match-resumes', methods=['POST'])
 def match_resumes_to_job():
     """Match candidates to a job description"""
     try:
+        job_manager, resume_matcher, candidate_ranker, _, _ = get_components()
+        db = get_db()
+        if not db:
+            return jsonify({'error': 'Database not available'}), 500
+        
         data = request.json
         job_id = data.get('jobId')
         candidate_ids = data.get('candidateIds', [])
@@ -178,7 +269,7 @@ def match_resumes_to_job():
             return jsonify({'error': 'Job not found'}), 404
         
         # Get candidates
-        candidates = get_candidates_by_ids(candidate_ids) if candidate_ids else get_all_candidates_from_db()
+        candidates = get_candidates_by_ids(db, candidate_ids) if candidate_ids else get_all_candidates_from_db(db)
         
         # Match resumes
         matched_results = resume_matcher.match_candidates_to_job(job, candidates)
@@ -192,13 +283,16 @@ def match_resumes_to_job():
         }), 200
         
     except Exception as e:
+        logger.error(f"Error matching resumes: {e}")
         return jsonify({'error': str(e)}), 500
 
 
-@recruiter_bp.route('/api/recruiter/match-resume-file', methods=['POST'])
+@recruiter_bp.route('/match-resume-file', methods=['POST'])
 def match_uploaded_resume():
     """Match a single uploaded resume to job"""
     try:
+        job_manager, resume_matcher, _, candidate_parser, _ = get_components()
+        
         if 'resume' not in request.files:
             return jsonify({'error': 'No resume file uploaded'}), 400
         
@@ -229,7 +323,8 @@ def match_uploaded_resume():
         match_score = resume_matcher.calculate_match_score(resume_data, job)
         
         # Clean up
-        os.remove(filepath)
+        if os.path.exists(filepath):
+            os.remove(filepath)
         
         return jsonify({
             'matchScore': match_score,
@@ -237,15 +332,21 @@ def match_uploaded_resume():
         }), 200
         
     except Exception as e:
+        logger.error(f"Error matching uploaded resume: {e}")
         return jsonify({'error': str(e)}), 500
 
 
 # ============ SHORTLIST MANAGEMENT ROUTES ============
 
-@recruiter_bp.route('/api/recruiter/shortlist', methods=['POST'])
+@recruiter_bp.route('/shortlist', methods=['POST'])
 def add_to_shortlist():
     """Add candidate to shortlist"""
     try:
+        job_manager, _, _, _, email_notifier = get_components()
+        db = get_db()
+        if not db:
+            return jsonify({'error': 'Database not available'}), 500
+        
         data = request.json
         
         required_fields = ['jobId', 'candidateId', 'recruiterId']
@@ -257,7 +358,7 @@ def add_to_shortlist():
         
         # Send email notification (optional)
         if data.get('sendEmail', False):
-            candidate = get_candidate_from_db(data['candidateId'])
+            candidate = get_candidate_from_db(db, data['candidateId'])
             job = job_manager.get_job_by_id(data['jobId'])
             email_notifier.send_shortlist_email(candidate, job)
         
@@ -267,13 +368,15 @@ def add_to_shortlist():
         }), 201
         
     except Exception as e:
+        logger.error(f"Error adding to shortlist: {e}")
         return jsonify({'error': str(e)}), 500
 
 
-@recruiter_bp.route('/api/recruiter/shortlist/<job_id>', methods=['GET'])
+@recruiter_bp.route('/shortlist/<job_id>', methods=['GET'])
 def get_shortlisted_candidates(job_id):
     """Get all shortlisted candidates for a job"""
     try:
+        job_manager, _, _, _, _ = get_components()
         shortlisted = job_manager.get_shortlisted_candidates(job_id)
         
         return jsonify({
@@ -282,13 +385,15 @@ def get_shortlisted_candidates(job_id):
         }), 200
         
     except Exception as e:
+        logger.error(f"Error getting shortlisted candidates: {e}")
         return jsonify({'error': str(e)}), 500
 
 
-@recruiter_bp.route('/api/recruiter/shortlist/<shortlist_id>', methods=['DELETE'])
+@recruiter_bp.route('/shortlist/<shortlist_id>', methods=['DELETE'])
 def remove_from_shortlist(shortlist_id):
     """Remove candidate from shortlist"""
     try:
+        job_manager, _, _, _, _ = get_components()
         success = job_manager.remove_from_shortlist(shortlist_id)
         
         if not success:
@@ -297,13 +402,15 @@ def remove_from_shortlist(shortlist_id):
         return jsonify({'message': 'Candidate removed from shortlist'}), 200
         
     except Exception as e:
+        logger.error(f"Error removing from shortlist: {e}")
         return jsonify({'error': str(e)}), 500
 
 
-@recruiter_bp.route('/api/recruiter/shortlist/<shortlist_id>/status', methods=['PUT'])
+@recruiter_bp.route('/shortlist/<shortlist_id>/status', methods=['PUT'])
 def update_shortlist_status(shortlist_id):
     """Update candidate status in shortlist"""
     try:
+        job_manager, _, _, _, _ = get_components()
         data = request.json
         status = data.get('status')
         
@@ -318,15 +425,17 @@ def update_shortlist_status(shortlist_id):
         return jsonify({'message': 'Status updated successfully'}), 200
         
     except Exception as e:
+        logger.error(f"Error updating shortlist status: {e}")
         return jsonify({'error': str(e)}), 500
 
 
 # ============ ANALYTICS ROUTES ============
 
-@recruiter_bp.route('/api/recruiter/analytics', methods=['GET'])
+@recruiter_bp.route('/analytics', methods=['GET'])
 def get_recruiter_analytics():
     """Get recruiter dashboard analytics"""
     try:
+        job_manager, _, _, _, _ = get_components()
         recruiter_id = request.args.get('recruiterId')
         
         if not recruiter_id:
@@ -342,51 +451,51 @@ def get_recruiter_analytics():
         return jsonify({'analytics': analytics}), 200
         
     except Exception as e:
+        logger.error(f"Error getting analytics: {e}")
         return jsonify({'error': str(e)}), 500
 
 
 # ============ HELPER FUNCTIONS ============
 
-def get_all_candidates_from_db():
+def get_all_candidates_from_db(db):
     """Fetch all candidates from database"""
-    # TODO: Implement based on your database structure
-    # This should query your users collection where role='candidate'
-    from app import get_db
-    db = get_db()
-    candidates = list(db.users.find({'role': 'candidate'}))
-    
-    for candidate in candidates:
-        candidate['_id'] = str(candidate['_id'])
-    
-    return candidates
+    try:
+        candidates = list(db.users.find({'role': 'candidate'}))
+        
+        for candidate in candidates:
+            candidate['_id'] = str(candidate['_id'])
+        
+        return candidates
+    except Exception as e:
+        logger.error(f"Error fetching candidates: {e}")
+        return []
 
 
-def get_candidate_from_db(candidate_id):
+def get_candidate_from_db(db, candidate_id):
     """Fetch single candidate"""
-    from app import get_db
-    db = get_db()
-    
     try:
         candidate = db.users.find_one({'_id': ObjectId(candidate_id)})
         if candidate:
             candidate['_id'] = str(candidate['_id'])
         return candidate
-    except:
+    except Exception as e:
+        logger.error(f"Error fetching candidate: {e}")
         return None
 
 
-def get_candidates_by_ids(candidate_ids):
+def get_candidates_by_ids(db, candidate_ids):
     """Fetch multiple candidates by IDs"""
-    from app import get_db
-    db = get_db()
-    
-    object_ids = [ObjectId(cid) for cid in candidate_ids]
-    candidates = list(db.users.find({'_id': {'$in': object_ids}}))
-    
-    for candidate in candidates:
-        candidate['_id'] = str(candidate['_id'])
-    
-    return candidates
+    try:
+        object_ids = [ObjectId(cid) for cid in candidate_ids]
+        candidates = list(db.users.find({'_id': {'$in': object_ids}}))
+        
+        for candidate in candidates:
+            candidate['_id'] = str(candidate['_id'])
+        
+        return candidates
+    except Exception as e:
+        logger.error(f"Error fetching candidates by IDs: {e}")
+        return []
 
 
 def apply_filters(candidates, filters):

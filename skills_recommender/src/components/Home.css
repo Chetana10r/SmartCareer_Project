@@ -19,13 +19,19 @@
 /* ========== HERO SECTION ========== */
 .hero-section {
   position: relative;
-  min-height: 90vh;
+  min-height: 100vh;
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 80px 20px 60px;
+  padding: 120px 20px 80px;
   overflow: hidden;
-  background: radial-gradient(ellipse at top, #1a1a2e 0%, #0a0a0a 60%);
+  background: radial-gradient(ellipse at top, #1a1a2e 0%, #0a0a0a 20%);
+}
+
+.badge-icon {
+  font-size: 0.2rem;
+  line-height: 1;
+  display: inline-block;
 }
 
 /* Particles Background */
@@ -96,9 +102,12 @@
 .hero-content {
   position: relative;
   z-index: 2;
-  max-width: 850px;
+  max-width: 1000px;
+  width: 100%;
   text-align: center;
   animation: fadeInUp 0.8s ease-out;
+  padding: 0 40px;
+  margin: 0 auto;
 }
 
 @keyframes fadeInUp {
@@ -117,7 +126,7 @@
   display: inline-flex;
   align-items: center;
   gap: 0.4rem;
-  padding: 0.4rem 1rem;
+  padding: "10rem 3rem 5rem";
   background: rgba(0, 224, 255, 0.1);
   border: 1px solid rgba(0, 224, 255, 0.3);
   border-radius: 50px;
@@ -129,7 +138,9 @@
 }
 
 .badge-icon {
-  font-size: 0.75rem;
+  font-size: 0.65rem;
+  line-height: 1;
+  transform: scale(0.85);
 }
 
 /* Hero Title */

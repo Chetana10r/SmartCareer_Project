@@ -18,8 +18,8 @@ const TestHistory = () => {
     try {
       const userId = localStorage.getItem('user_id') || 'guest';
       const response = await axios.get(`http://localhost:5000/api/test_history/${userId}`);
-      setHistory(response.data.history);
-      setStats(response.data.stats);
+      setHistory(response.data.history || []);
+      setStats(response.data.stats || {});
     } catch (error) {
       console.error('Error fetching history:', error);
       alert('Failed to load test history');
@@ -29,8 +29,9 @@ const TestHistory = () => {
   };
 
   const formatDate = (timestamp) => {
+    if (!timestamp) return 'N/A';
     const date = new Date(timestamp);
-    return date.toLocaleDateString('en-US', {
+    return date.toLocaleString('en-US', {
       year: 'numeric',
       month: 'short',
       day: 'numeric',
@@ -45,33 +46,10 @@ const TestHistory = () => {
     return `${mins}m ${secs}s`;
   };
 
-  const getScoreColor = (score, total) => {
-    const percentage = (score / total) * 100;
+  const getScoreColor = (percentage) => {
     if (percentage >= 80) return '#4caf50';
     if (percentage >= 60) return '#ff9800';
     return '#f44336';
-  };
-
-  const viewResult = async (attemptId) => {
-    try {
-      const response = await axios.get(`http://localhost:5000/api/test_result/${attemptId}`);
-      navigate('/mock-test/result', { 
-        state: { 
-          result: {
-            score: response.data.score,
-            total: response.data.total_questions,
-            percentage: (response.data.score / response.data.total_questions) * 100,
-            results: response.data.answers,
-            time_taken: response.data.time_taken,
-            passed: (response.data.score / response.data.total_questions) >= 0.6
-          },
-          subject: response.data.subject
-        } 
-      });
-    } catch (error) {
-      console.error('Error loading result:', error);
-      alert('Failed to load result details');
-    }
   };
 
   if (loading) {
@@ -92,7 +70,7 @@ const TestHistory = () => {
         </button>
       </div>
 
-      {stats && (
+      {stats && stats.total_tests > 0 && (
         <div className="stats-summary">
           <div className="stat-card">
             <div style={{ fontSize: '2.5rem', color: '#2196f3' }}>🏆</div>
@@ -128,10 +106,10 @@ const TestHistory = () => {
       ) : (
         <div className="history-list">
           <h2>Recent Tests</h2>
-          {history.map((attempt) => {
-            const percentage = (attempt.score / attempt.total_questions) * 100;
+          {history.map((attempt, index) => {
+            const percentage = attempt.percentage || (attempt.score / attempt.total_questions) * 100;
             return (
-              <div key={attempt.attempt_id} className="history-item">
+              <div key={index} className="history-item">
                 <div className="history-left">
                   <h3>{attempt.subject}</h3>
                   <div className="history-meta">
@@ -139,12 +117,12 @@ const TestHistory = () => {
                     <span>⏱️ {formatTime(attempt.time_taken)}</span>
                   </div>
                 </div>
-                
+
                 <div className="history-right">
-                  <div 
+                  <div
                     className="score-badge"
-                    style={{ 
-                      backgroundColor: getScoreColor(attempt.score, attempt.total_questions) 
+                    style={{
+                      backgroundColor: getScoreColor(percentage)
                     }}
                   >
                     {percentage.toFixed(0)}%
@@ -152,12 +130,6 @@ const TestHistory = () => {
                   <span className="score-text">
                     {attempt.score}/{attempt.total_questions}
                   </span>
-                  <button 
-                    onClick={() => viewResult(attempt.attempt_id)}
-                    className="view-btn"
-                  >
-                    View Details
-                  </button>
                 </div>
               </div>
             );

@@ -99,8 +99,7 @@ function InterviewSession() {
   const loadNextQuestion = async () => {
     setIsProcessing(true);
     try {
-      const response = await fetch('http://127.0.0.1:5000/get_next_question', {
-        method: 'POST',
+      const response = await fetch('http://127.0.0.1:5000/api/interview/get_next_question', {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           session_id: sessionId,
@@ -234,7 +233,7 @@ function InterviewSession() {
       formData.append('question_number', questionNumber);
       formData.append('transcript', transcript);
 
-      const response = await fetch('http://127.0.0.1:5000/submit_answer', {
+      const response = await fetch('http://127.0.0.1:5000/api/interview/submit_answer', {
         method: 'POST',
         body: formData
       });
@@ -284,7 +283,7 @@ function InterviewSession() {
 
   const handleEndInterview = async () => {
     try {
-      const response = await fetch('http://127.0.0.1:5000/end_interview', {
+      const response = await fetch('http://127.0.0.1:5000/api/interview/end_interview', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ session_id: sessionId })

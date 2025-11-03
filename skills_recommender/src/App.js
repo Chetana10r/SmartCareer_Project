@@ -39,17 +39,30 @@ import "./App.css";
 function LayoutWrapper({ children }) {
   const location = useLocation();
 
-  // Show Recruiter Navbar only on recruiter pages
-  const isRecruiterPage = location.pathname.startsWith("/recruiter");
+  // Check if current route is a recruiter page
+  const isRecruiterPage = location.pathname.startsWith("/recruiter-dashboard") ||
+                         location.pathname.startsWith("/post-job") ||
+                         location.pathname.startsWith("/job-listings") ||
+                         location.pathname.startsWith("/search-candidates") ||
+                         location.pathname.startsWith("/resume-matching") ||
+                         location.pathname.startsWith("/shortlist-manager");
+
+  // Check if current route is an auth page (no navbar)
+  const isAuthPage = location.pathname === "/role-selection" || 
+                     location.pathname === "/login";
 
   return (
     <div className="app-container">
-      {!isRecruiterPage && <Navbar />}
+      {/* Show RecruiterNavbar for recruiter pages */}
       {isRecruiterPage && <RecruiterNavbar />}
+      
+      {/* Show regular Navbar for all other pages except auth pages */}
+      {!isRecruiterPage && !isAuthPage && <Navbar />}
 
       <div className="content-wrap">{children}</div>
 
-      {!isRecruiterPage && <Footer />}
+      {/* Show Footer only for non-recruiter and non-auth pages */}
+      {!isRecruiterPage && !isAuthPage && <Footer />}
     </div>
   );
 }
@@ -59,7 +72,11 @@ function App() {
     <Router>
       <LayoutWrapper>
         <Routes>
-          {/* Candidate / General Routes */}
+          {/* Auth Routes (No Navbar) */}
+          <Route path="/role-selection" element={<RoleSelection />} />
+          <Route path="/login" element={<Login />} />
+
+          {/* Candidate / General Routes (Regular Navbar) */}
           <Route path="/" element={<Home />} />
           <Route path="/domain-check" element={<DomainCheck />} />
           <Route path="/skill-predict" element={<SkillPrediction />} />
@@ -69,23 +86,19 @@ function App() {
           <Route path="/contact" element={<Contact />} />
           <Route path="/resume-optimizer" element={<ResumeOptimizer />} />
 
-          {/* Interview */}
+          {/* Interview Routes (Regular Navbar) */}
           <Route path="/mock-interview" element={<InterviewSetup />} />
           <Route path="/interview-session" element={<InterviewSession />} />
           <Route path="/interview-feedback" element={<InterviewFeedback />} />
           <Route path="/interview-history" element={<InterviewHistory />} />
 
-          {/* Mock Test */}
+          {/* Mock Test Routes (Regular Navbar) */}
           <Route path="/mock-test" element={<SubjectSelection />} />
           <Route path="/mock-test/quiz" element={<MockTestQuiz />} />
           <Route path="/mock-test/result" element={<ResultPage />} />
           <Route path="/mock-test/history" element={<TestHistory />} />
 
-          {/* Auth */}
-          <Route path="/role-selection" element={<RoleSelection />} />
-          <Route path="/login" element={<Login />} />
-
-          {/* Recruiter */}
+          {/* Recruiter Routes (Recruiter Navbar) */}
           <Route path="/recruiter-dashboard" element={<RecruiterDashboard />} />
           <Route path="/post-job" element={<JobPosting />} />
           <Route path="/search-candidates" element={<CandidateSearch />} />

@@ -35,7 +35,7 @@ const styles = {
     background: "linear-gradient(to right, #0f2027, #203a43, #2c5364)",
     color: "white",
     minHeight: "100vh",
-    padding: "3rem 2rem",
+    padding: "6rem 2rem 3rem", // ⬅️ Added extra top padding
     fontFamily: "'Segoe UI', sans-serif",
     textAlign: "center",
   },
