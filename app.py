@@ -418,70 +418,101 @@ def detect_resume_domain():
 
 @app.route("/proceed_prediction", methods=["POST"])
 def proceed_prediction():
-    """Make predictions"""
+    """Make predictions based on resume content"""
+    # Check file upload
     if "resume" not in request.files:
-        return jsonify({"error": "No resume uploaded"}), 400
+        return jsonify({"error": "No resume file uploaded."}), 400
     
     file = request.files["resume"]
+    
+    # Check filename exists
+    if not file.filename:
+        return jsonify({"error": "Invalid file."}), 400
+    
+    # Check PDF format
     if not file.filename.lower().endswith(".pdf"):
-        return jsonify({"error": "Only PDF files supported"}), 400
+        return jsonify({"error": "Only PDF files are supported."}), 400
     
     try:
+        # Extract text
         text = extract_text_from_pdf(file)
         if not text or text == "Unable to extract text from PDF":
-            return jsonify({"error": "Could not extract text"}), 400
+            return jsonify({"error": "Could not extract text from PDF."}), 400
         
+        # Clean and preprocess
         cleaned = lemmatize(clean_text(text))
-        domain = detect_domain(cleaned)
+        if not cleaned or len(cleaned.strip()) == 0:
+            return jsonify({"error": "No valid text content found in resume."}), 400
         
+        # Detect domain
+        domain = detect_domain(cleaned)
+        app.logger.info(f"Domain detected: {domain}")
+        
+        # Domain-specific prediction
         if domain == "IT":
-            if not all([models['it_tfidf'], models['it_skill_model']]):
-                return jsonify({"error": "IT models not loaded"}), 500
+            # Skill prediction
+            vec = it_tfidf.transform([cleaned])
+            pred = it_skill_model.predict(vec)
+            skills = it_mlb.inverse_transform(pred)[0]
             
-            vec = models['it_tfidf'].transform([cleaned])
-            pred = models['it_skill_model'].predict(vec)
-            skills = models['it_mlb'].inverse_transform(pred)[0] if models['it_mlb'] else []
-            role = models['it_role_model'].predict(models['it_tfidf'].transform([" ".join(skills)]))[0] if skills and models['it_role_model'] else "Not determined"
+            # Role prediction - FIX: handle empty skills
+            skills_text = " ".join(skills) if skills else "general"
+            role = it_role_model.predict(it_tfidf.transform([skills_text]))[0]
+            
+            # Extract and compare skills
             resume_skills = extract_skills(cleaned, IT_SKILL_LIST)
             missing = get_missing_skills(resume_skills, IT_SKILL_LIST)
             
-            if models['it_coursecert_tfidf'] and models['it_course_model']:
-                x_vec = models['it_coursecert_tfidf'].transform([" ".join(missing) if missing else "general"])
-                course = models['it_course_model'].predict(x_vec)[0]
-                cert = models['it_cert_model'].predict(x_vec)[0] if models['it_cert_model'] else "N/A"
-            else:
-                course = cert = "N/A"
-        else:
-            if not all([models['nonit_tfidf'], models['nonit_skill_model']]):
-                return jsonify({"error": "Non-IT models not loaded"}), 500
+            # Course/cert recommendation
+            missing_text = " ".join(missing) if missing else "general"
+            x_vec = it_coursecert_tfidf.transform([missing_text])
+            course = it_course_model.predict(x_vec)[0]
+            cert = it_cert_model.predict(x_vec)[0]
             
-            vec = models['nonit_tfidf'].transform([cleaned])
-            pred = models['nonit_skill_model'].predict(vec)
-            skills = models['nonit_mlb'].inverse_transform(pred)[0] if models['nonit_mlb'] else []
-            role = models['nonit_role_model'].predict(models['nonit_tfidf'].transform([" ".join(skills)]))[0] if skills and models['nonit_role_model'] else "Not determined"
+        else:  # Non-IT domain
+            # Skill prediction
+            vec = nonit_tfidf.transform([cleaned])
+            pred = nonit_skill_model.predict(vec)
+            skills = nonit_mlb.inverse_transform(pred)[0]
+            
+            # Role prediction - FIX: handle empty skills
+            skills_text = " ".join(skills) if skills else "general"
+            role = nonit_role_model.predict(nonit_tfidf.transform([skills_text]))[0]
+            
+            # Extract and compare skills
             resume_skills = extract_skills(cleaned, NON_IT_SKILL_LIST)
             missing = get_missing_skills(resume_skills, NON_IT_SKILL_LIST)
             
-            if models['nonit_coursecert_tfidf'] and models['nonit_course_model']:
-                x_vec = models['nonit_coursecert_tfidf'].transform([" ".join(missing) if missing else "general"])
-                course = models['nonit_course_model'].predict(x_vec)[0]
-                cert = models['nonit_cert_model'].predict(x_vec)[0] if models['nonit_cert_model'] else "N/A"
-            else:
-                course = cert = "N/A"
+            # Course/cert recommendation
+            missing_text = " ".join(missing) if missing else "general"
+            x_vec = nonit_coursecert_tfidf.transform([missing_text])
+            course = nonit_course_model.predict(x_vec)[0]
+            cert = nonit_cert_model.predict(x_vec)[0]
         
+        # Return response
         return jsonify({
             "domain": domain,
-            "predicted_skills": ", ".join(skills) if skills else "No skills predicted",
-            "resume_skills": resume_skills,
-            "missing_skills": missing,
+            "predicted_skills": ", ".join(skills) if skills else "No specific skills predicted",
+            "resume_skills": resume_skills if resume_skills else [],
+            "missing_skills": missing if missing else [],
             "predicted_role": role,
-            "recommendation": {"course": course, "certificate": cert}
-        })
-    except Exception as e:
-        logger.error(f"Error in prediction: {e}")
+            "recommendation": {
+                "course": course,
+                "certificate": cert
+            }
+        }), 200
+        
+    except AttributeError as ae:
+        app.logger.error(f"Model not loaded properly: {ae}")
         import traceback
         traceback.print_exc()
-        return jsonify({"error": str(e)}), 500
+        return jsonify({"error": "System models not initialized. Please contact support."}), 500
+        
+    except Exception as e:
+        app.logger.error(f"Error in proceed_prediction: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({"error": f"An error occurred: {str(e)}"}), 500
 
 # ============================================
 # ROUTES - JOB SCRAPING
