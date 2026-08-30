@@ -17,6 +17,7 @@ from datetime import datetime
 from pymongo import MongoClient
 from bson import ObjectId
 from dotenv import load_dotenv
+from recruiter_compat_routes import register_recruiter_compat_routes
 
 # Load environment variables
 load_dotenv()
@@ -290,8 +291,14 @@ def register_blueprints():
         logger.error(f"❌ Recruiter blueprint error: {e}")
         import traceback
         traceback.print_exc()
-    
-    _BLUEPRINTS_REGISTERED = True
+
+    try:
+        register_recruiter_compat_routes(app)
+        logger.info("✅ Recruiter compat routes registered")
+    except Exception as e:
+        logger.error(f"❌ Recruiter compat routes error: {e}")
+
+    _BLUEPRINTS_REGISTERED = True  
 
 # Register blueprints
 register_blueprints()
@@ -444,6 +451,31 @@ def proceed_prediction():
         if not cleaned or len(cleaned.strip()) == 0:
             return jsonify({"error": "No valid text content found in resume."}), 400
         
+        # Unpack models from dict
+        it_tfidf            = models.get('it_tfidf')
+        nonit_tfidf         = models.get('nonit_tfidf')
+        it_skill_model      = models.get('it_skill_model')
+        nonit_skill_model   = models.get('nonit_skill_model')
+        it_mlb              = models.get('it_mlb')
+        nonit_mlb           = models.get('nonit_mlb')
+        it_role_model       = models.get('it_role_model')
+        nonit_role_model    = models.get('nonit_role_model')
+        it_course_model     = models.get('it_course_model')
+        nonit_course_model  = models.get('nonit_course_model')
+        it_cert_model       = models.get('it_cert_model')
+        nonit_cert_model    = models.get('nonit_cert_model')
+        it_coursecert_tfidf   = models.get('it_coursecert_tfidf')
+        nonit_coursecert_tfidf = models.get('nonit_coursecert_tfidf')
+
+        # Check all required models are loaded
+        required = {
+            'it_tfidf': it_tfidf, 'nonit_tfidf': nonit_tfidf,
+            'it_skill_model': it_skill_model, 'nonit_skill_model': nonit_skill_model,
+        }
+        missing_models = [k for k, v in required.items() if v is None]
+        if missing_models:
+            return jsonify({"error": f"ML models not loaded: {missing_models}. Run the app from the correct directory."}), 500
+
         # Detect domain
         domain = detect_domain(cleaned)
         app.logger.info(f"Domain detected: {domain}")

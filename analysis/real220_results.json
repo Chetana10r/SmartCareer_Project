@@ -1,0 +1,29 @@
+{
+  "skill": {
+    "tp": 336,
+    "fp": 1809,
+    "fn": 0,
+    "precision": 0.15664335664335666,
+    "recall": 1.0,
+    "f1": 0.2708585247883918,
+    "oracle_recall": 1.0
+  },
+  "experience": {
+    "n": 27,
+    "within05": 8,
+    "within1": 12,
+    "zero": 16
+  },
+  "education": {
+    "n": 192,
+    "hit": 177
+  },
+  "email": {
+    "n": 190,
+    "hit": 0
+  },
+  "name": {
+    "n": 218,
+    "hit": 218
+  }
+}

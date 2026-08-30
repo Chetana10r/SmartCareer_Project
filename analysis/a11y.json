@@ -1,0 +1,21 @@
+{
+  "files": 35,
+  "elements": {
+    "<img": 1,
+    "<input": 42,
+    "<select": 11,
+    "<button": 96,
+    "<a": 6
+  },
+  "violations": {
+    "1.1.1 Non-text content: <img> without alt": 0,
+    "1.3.1 Info & relationships: <input> without id/aria-label": 38,
+    "1.3.1 Info & relationships: <select> without label": 11,
+    "2.1.1 Keyboard: onClick on non-interactive element": 15,
+    "4.1.2 Name/role/value: <button> with no text or aria-label": 0,
+    "2.4.4 Link purpose: <a> without href": 1
+  },
+  "total_violations": 65,
+  "alt_ratio": 1.0,
+  "input_label_ratio": 0.09523809523809523
+}

@@ -4,8 +4,14 @@ from typing import List, Dict
 class CandidateRanker:
     def __init__(self):
         """Initialize candidate ranking system"""
+        # NOTE: the first key MUST match the key emitted by
+        # ResumeMatcher.match_candidates_to_job(), which is 'matchScore'.
+        # It was previously 'overallScore'; because _calculate_composite_score
+        # skipped absent keys silently, that mismatch discarded 0.40 of the
+        # weight mass and capped the attainable score at 60, making the
+        # 'Excellent' (>=85) and 'Strong' (>=70) tiers unreachable.
         self.ranking_criteria = {
-            'overallScore': 0.40,
+            'matchScore': 0.40,
             'skillsMatch': 0.25,
             'experienceMatch': 0.20,
             'educationMatch': 0.10,
@@ -51,13 +57,31 @@ class CandidateRanker:
         return ranked_candidates
     
     def _calculate_composite_score(self, candidate: Dict, weights: Dict) -> float:
-        """Calculate weighted composite score"""
-        score = 0.0
-        
-        for criterion, weight in weights.items():
-            if criterion in candidate:
-                score += candidate[criterion] * weight
-        
+        """
+        Calculate the weighted composite score.
+
+        Any criterion named in `weights` but absent from `candidate` is a schema
+        mismatch, not a legitimate optional field. Silently skipping it (the
+        previous behaviour) produces a score on a smaller scale than the tier
+        thresholds assume, which is invisible at runtime. We therefore fail loudly.
+        """
+        missing = [c for c in weights if c not in candidate]
+        if missing:
+            raise KeyError(
+                "CandidateRanker: ranking criteria %s are absent from the candidate "
+                "record. Expected keys emitted by ResumeMatcher.match_candidates_to_job(). "
+                "Present keys: %s" % (missing, sorted(candidate))
+            )
+
+        total_weight = sum(weights.values())
+        if abs(total_weight - 1.0) > 1e-6:
+            raise ValueError(
+                "CandidateRanker: ranking weights must sum to 1.0 so that a candidate "
+                "scoring 100 on every component attains 100 and every tier is reachable; "
+                "got %.4f" % total_weight
+            )
+
+        score = sum(candidate[c] * w for c, w in weights.items())
         return round(score, 2)
     
     def _assign_tier(self, score: float) -> str:

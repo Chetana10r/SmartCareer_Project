@@ -43,7 +43,14 @@ input[type="file"] {
   min-height: 100vh;
 }
 
+/* Navbar is fixed at 65px — push all page content below it */
 .content-wrap {
   flex: 1;
-  padding-bottom: 60px; /* height of the footer */
+  padding-top: 65px;      /* exactly matches navbar height */
+  padding-bottom: 60px;   /* height of the footer */
+}
+
+/* Recruiter pages use a different navbar (not fixed) so no top padding needed */
+.content-wrap.recruiter-content {
+  padding-top: 0;
 }

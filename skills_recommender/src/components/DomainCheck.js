@@ -1,51 +1,57 @@
 import React, { useState } from "react";
-import axios from "axios";
 import { useNavigate } from "react-router-dom";
 import "./DomainCheck.css";
 
 function DomainCheck() {
+  const navigate   = useNavigate();
   const [resumeFile, setResumeFile] = useState(null);
-  const [domain, setDomain] = useState("");
-  const [showPopup, setShowPopup] = useState(false);
-  const [showConfirmation, setShowConfirmation] = useState(false);
-  const [isProceeding, setIsProceeding] = useState(false);
-  const navigate = useNavigate();
+  const [domain,     setDomain]     = useState("");
+  const [detecting,  setDetecting]  = useState(false);
+  const [detected,   setDetected]   = useState(false);
+  const [proceeding, setProceeding] = useState(false);
+  const [error,      setError]      = useState("");
 
   const handleFileChange = (e) => {
-    setResumeFile(e.target.files[0]);
-    setShowPopup(false);
-    setShowConfirmation(false);
+    const file = e.target.files[0];
+    if (!file) return;
+    if (file.type !== "application/pdf") {
+      setError("Please upload a valid PDF file.");
+      setResumeFile(null);
+      return;
+    }
+    setError("");
+    setResumeFile(file);
+    setDetected(false);
     setDomain("");
   };
 
   const handleDetectDomain = async () => {
-    if (!resumeFile) {
-      alert("Please upload a PDF resume.");
-      return;
-    }
+    if (!resumeFile) { setError("Please select a PDF resume first."); return; }
+    setDetecting(true);
+    setError("");
+    setDetected(false);
 
     const formData = new FormData();
     formData.append("resume", resumeFile);
 
     try {
-      const res = await axios.post("http://localhost:5000/detect_domain", formData);
-      setDomain(res.data.domain);
-      setShowPopup(true);
+      const res  = await fetch("http://localhost:5000/detect_domain", { method: "POST", body: formData });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Detection failed");
+      setDomain(data.domain);
+      setDetected(true);
     } catch (err) {
-      console.error(err);
-      alert("Failed to detect domain. Try again.");
+      setError("Failed to detect domain: " + err.message);
+    } finally {
+      setDetecting(false);
     }
   };
 
-  const handlePopupClick = () => {
-    setShowConfirmation(true);
-  };
-
   const handleProceed = () => {
-    setIsProceeding(true);
+    setProceeding(true);
     setTimeout(() => {
       navigate("/skill-predict", { state: { domain, resume: resumeFile } });
-    }, 1500);
+    }, 600);
   };
 
   return (
@@ -59,38 +65,61 @@ function DomainCheck() {
         <h2>📌 Upload Your Resume for Domain Detection</h2>
         <p>Let us analyze and guide your career journey based on your skills!</p>
 
-        <label htmlFor="file-upload" className="custom-upload-label">
-          📄 Choose PDF Resume
-        </label>
+        {/* Hidden file input + styled label */}
         <input
           id="file-upload"
           type="file"
           accept="application/pdf"
           onChange={handleFileChange}
+          style={{ display: "none" }}
         />
+        <label htmlFor="file-upload" className="custom-upload-label">
+          📄 Choose PDF Resume
+        </label>
 
         {resumeFile && (
           <p className="file-name">
-            ✅ Selected File: <strong>{resumeFile.name}</strong>
+            ✅ Selected: <strong>{resumeFile.name}</strong>{" "}
+            <span style={{ color: "#888", fontSize: "0.82rem" }}>
+              ({(resumeFile.size / 1024).toFixed(1)} KB)
+            </span>
           </p>
         )}
 
-        <button className="detect-btn" onClick={handleDetectDomain}>
-          🔍 Detect Domain
+        {error && (
+          <p style={{ color: "#e74c3c", marginTop: "0.5rem", fontSize: "0.88rem" }}>
+            ⚠️ {error}
+          </p>
+        )}
+
+        <button
+          className="detect-btn"
+          onClick={handleDetectDomain}
+          disabled={!resumeFile || detecting}
+          style={{ opacity: (!resumeFile || detecting) ? 0.65 : 1 }}
+        >
+          {detecting ? "⏳ Detecting..." : "🔍 Detect Domain"}
         </button>
       </div>
 
-      {showPopup && (
-        <div className="popup" onClick={handlePopupClick}>
+      {detected && (
+        <div className="popup">
           <p>🎯 Detected Domain: <strong>{domain}</strong></p>
-          {showConfirmation && (
-            <div className="popup-confirmation">
-              <p>Would you like to see a personalized skill analysis?</p>
-              <button className="proceed-btn" onClick={handleProceed}>
-                {isProceeding ? "Loading..." : "✅ Proceed"}
-              </button>
-            </div>
-          )}
+          <p style={{ fontSize: "0.88rem", color: "#555", marginTop: "0.4rem" }}>
+            {domain === "IT"
+              ? "Your resume is in the IT/Technology domain."
+              : "Your resume is in the Non-IT domain."}
+          </p>
+          <div className="popup-confirmation">
+            <p>Would you like to see a personalized skill analysis?</p>
+            <button
+              className="proceed-btn"
+              onClick={handleProceed}
+              disabled={proceeding}
+            >
+              {proceeding ? "⏳ Processing..." : "✅ Proceed with Analysis"}
+            </button>
+          </div>
         </div>
       )}
     </div>

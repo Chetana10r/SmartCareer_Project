@@ -1,0 +1,23 @@
+{
+  "corpus": "Resume Corpus Dataset",
+  "resumes": 349,
+  "with_skills": 195,
+  "distinct": 1985,
+  "tokens": 2564,
+  "type_coverage": 0.1707808564231738,
+  "token_coverage": 0.20826833073322934,
+  "per_resume_mean": 0.23995898623059167,
+  "per_resume_median": 0.14285714285714285,
+  "zero_pct": 41.02564102564102,
+  "experience_nonzero": 0.45794392523364486,
+  "experience_n": 214,
+  "never_seen": [
+    "vue",
+    "redis",
+    "deep learning",
+    "c++",
+    "c#",
+    "ci/cd",
+    "scikit-learn"
+  ]
+}

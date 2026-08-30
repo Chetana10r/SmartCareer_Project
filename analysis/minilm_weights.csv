@@ -1,0 +1,3 @@
+domain,ndcg_heur,ndcg_ca,cv_heur,cv_learned,ca_S_skills,ca_S_experience,ca_S_education,ca_S_keyword,ca_S_semantic,lr_S_skills,lr_S_experience,lr_S_education,lr_S_keyword,lr_S_semantic
+IT,0.48722712888316744,0.6420893039140301,0.48722712888316744,0.3549785583536184,0.12,0.32,0.0,0.32,0.24,0.0,0.0029,0.0185,0.7369,0.2417
+Non-IT,0.6393441578658733,0.785327215580128,0.6393441578658733,0.6865417967938329,0.0,0.0,0.0,0.5714,0.4286,0.0,0.0,0.0,0.4144,0.5856

@@ -1,0 +1,21 @@
+{
+  "bloom_concordance": 0.39285714285714285,
+  "n_technical": 28,
+  "bloom_means": {
+    "easy": 2.375,
+    "medium": 3.9,
+    "hard": 4.1
+  },
+  "behavioural_ratio": 0.5333333333333333,
+  "role_coverage": 0.2,
+  "uncovered_roles": [
+    "accountant",
+    "ai engineer",
+    "business analyst",
+    "cloud engineer",
+    "customer support representative",
+    "market research analyst",
+    "operations manager",
+    "web developer"
+  ]
+}

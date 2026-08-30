@@ -1,0 +1,168 @@
+.jd-container {
+  min-height: 100vh;
+  background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+  padding: 2rem;
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+}
+
+.jd-loading, .jd-not-found {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 60vh;
+  gap: 1rem;
+  color: #555;
+}
+.jd-spinner {
+  width: 50px; height: 50px;
+  border: 4px solid #e0e0e0;
+  border-top-color: #3498db;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+.jd-nf-icon { font-size: 3rem; }
+
+.jd-header {
+  max-width: 960px;
+  margin: 0 auto 1.5rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 1rem;
+}
+.jd-header-actions { display: flex; gap: 0.75rem; }
+
+.jd-back-btn {
+  padding: 0.6rem 1.2rem;
+  background: white;
+  border: 2px solid #3498db;
+  color: #3498db;
+  border-radius: 8px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.jd-back-btn:hover { background: #3498db; color: white; }
+
+.jd-btn-primary {
+  padding: 0.6rem 1.4rem;
+  background: linear-gradient(135deg, #3498db, #2980b9);
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 0.2s;
+}
+.jd-btn-primary:hover { opacity: 0.9; }
+
+.jd-btn-secondary {
+  padding: 0.6rem 1.2rem;
+  background: white;
+  border: 2px solid #95a5a6;
+  color: #555;
+  border-radius: 8px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.jd-btn-secondary:hover { border-color: #3498db; color: #3498db; }
+
+.jd-btn-outline {
+  padding: 0.6rem 1.2rem;
+  background: white;
+  border: 2px solid #3498db;
+  color: #3498db;
+  border-radius: 8px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.jd-btn-outline:hover { background: #3498db; color: white; }
+
+/* Title Card */
+.jd-title-card {
+  max-width: 960px;
+  margin: 0 auto 1.5rem;
+  background: white;
+  border-radius: 16px;
+  padding: 2rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 1rem;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+}
+.jd-title-left { display: flex; align-items: center; gap: 1.2rem; }
+.jd-company-logo {
+  width: 60px; height: 60px;
+  background: linear-gradient(135deg, #3498db, #2980b9);
+  color: white;
+  border-radius: 14px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 1.8rem; font-weight: 700;
+}
+.jd-job-title { font-size: 1.6rem; font-weight: 700; color: #2c3e50; margin: 0 0 0.25rem; }
+.jd-company-name { color: #7f8c8d; font-size: 1rem; margin: 0; }
+.jd-status-badge { padding: 0.4rem 1rem; border-radius: 20px; font-weight: 600; font-size: 0.85rem; }
+
+/* Meta Grid */
+.jd-meta-grid {
+  max-width: 960px;
+  margin: 0 auto 1.5rem;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 1rem;
+}
+.jd-meta-card {
+  background: white;
+  border-radius: 12px;
+  padding: 1rem 1.2rem;
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+  box-shadow: 0 2px 10px rgba(0,0,0,0.06);
+}
+.jd-meta-icon { font-size: 1.4rem; }
+.jd-meta-label { font-size: 0.75rem; color: #95a5a6; text-transform: uppercase; letter-spacing: 0.5px; }
+.jd-meta-value { font-weight: 600; color: #2c3e50; font-size: 0.95rem; }
+
+/* Sections */
+.jd-section {
+  max-width: 960px;
+  margin: 0 auto 1.5rem;
+  background: white;
+  border-radius: 16px;
+  padding: 1.8rem 2rem;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+}
+.jd-section-title { font-size: 1.1rem; font-weight: 700; color: #2c3e50; margin: 0 0 1rem; }
+
+.jd-skills-wrap { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+.jd-skill-tag {
+  padding: 0.35rem 0.9rem;
+  background: linear-gradient(135deg, #ebf5fb, #d6eaf8);
+  color: #2980b9;
+  border-radius: 20px;
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.jd-description { color: #555; line-height: 1.8; margin: 0; }
+
+.jd-requirements { display: flex; flex-direction: column; gap: 0.6rem; }
+.jd-req-item { display: flex; gap: 0.8rem; align-items: flex-start; }
+.jd-req-bullet { color: #27ae60; font-weight: 700; flex-shrink: 0; }
+
+.jd-bottom-actions {
+  max-width: 960px;
+  margin: 0 auto;
+  display: flex;
+  gap: 1rem;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+}

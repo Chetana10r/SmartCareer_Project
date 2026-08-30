@@ -1,0 +1,26 @@
+id,name,email,phone,experience,location,skills,education,match_score,resume_url
+1,Rahul Sharma,rahul.sharma@email.com,+91-9876543210,3 years,Mumbai India,"Python, Machine Learning, TensorFlow, SQL, Pandas",B.Tech in CS - IIT Bombay,92,#
+2,Priya Patel,priya.patel@email.com,+91-9876543211,5 years,Bangalore India,"Data Science, Python, R, Deep Learning, NLP",M.Tech in Data Science - IISc,88,#
+3,Amit Kumar,amit.kumar@email.com,+91-9876543212,2 years,Delhi India,"Java, Spring Boot, Microservices, AWS, Docker",B.Tech in IT - DTU,85,#
+4,Sneha Reddy,sneha.reddy@email.com,+91-9876543213,6 years,Hyderabad India,"Python, Deep Learning, NLP, PyTorch, MLOps",M.Tech in AI - IIIT Hyderabad,90,#
+5,Vikram Singh,vikram.singh@email.com,+91-9876543214,4 years,Pune India,"React, Node.js, MongoDB, GraphQL, TypeScript",B.E. CS - Pune University,86,#
+6,Anjali Mehta,anjali.mehta@email.com,+91-9876543215,7 years,Chennai India,"DevOps, Kubernetes, Terraform, AWS, CI/CD, Linux",B.Tech CS - Anna University,94,#
+7,Rohan Gupta,rohan.gupta@email.com,+91-9876543216,1 year,Kolkata India,"HTML, CSS, JavaScript, React, Tailwind",B.Sc CS - Calcutta University,78,#
+8,Divya Nair,divya.nair@email.com,+91-9876543217,3 years,Kochi India,"SQL, Python, Tableau, Power BI, Excel, Statistics",MBA Analytics - IIM Kozhikode,83,#
+9,Karthik Iyer,karthik.iyer@email.com,+91-9876543218,5 years,Bangalore India,"Kotlin, Java, Android SDK, Firebase, Jetpack Compose",B.Tech CSE - VIT Vellore,89,#
+10,Pooja Desai,pooja.desai@email.com,+91-9876543219,8 years,Mumbai India,"Python, Django, FastAPI, PostgreSQL, Redis, Docker",M.Tech SE - BITS Pilani,96,#
+11,Arjun Verma,arjun.verma@email.com,+91-9876543220,2 years,Jaipur India,"React, JavaScript, CSS, HTML5, Figma",B.Tech IT - MNIT Jaipur,80,#
+12,Meera Krishnan,meera.k@email.com,+91-9876543221,4 years,Coimbatore India,"Python, SQL, Pandas, Machine Learning, Tableau",M.Sc Statistics - PSG College,84,#
+13,Dev Malhotra,dev.malhotra@email.com,+91-9876543222,6 years,Gurgaon India,"AWS, Docker, Kubernetes, Terraform, Python, CI/CD",B.Tech CS - NSIT Delhi,91,#
+14,Nisha Tiwari,nisha.tiwari@email.com,+91-9876543223,3 years,Lucknow India,"Java, Spring MVC, MySQL, REST API, Git",MCA - Lucknow University,77,#
+15,Suresh Babu,suresh.babu@email.com,+91-9876543224,9 years,Hyderabad India,"Python, Spark, Hadoop, Hive, Kafka, Data Engineering",B.Tech ECE - JNTU Hyderabad,93,#
+16,Lakshmi Rao,lakshmi.rao@email.com,+91-9876543225,2 years,Visakhapatnam India,"Excel, SQL, Power BI, Data Analysis, MS Office",BBA - Andhra University,75,#
+17,Akash Joshi,akash.joshi@email.com,+91-9876543226,5 years,Ahmedabad India,"Node.js, Express, MongoDB, React, AWS, GraphQL",B.Tech IT - Gujarat University,87,#
+18,Riya Kapoor,riya.kapoor@email.com,+91-9876543227,1 year,Delhi India,"Python, Data Analysis, Tableau, SQL, MS Excel",B.Sc Economics - DU,76,#
+19,Manish Pandey,manish.p@email.com,+91-9876543228,7 years,Pune India,"Java, Microservices, Spring Boot, Kafka, Docker, K8s",M.Tech CS - COEP Pune,92,#
+20,Shreya Bose,shreya.bose@email.com,+91-9876543229,4 years,Kolkata India,"Android, Kotlin, Jetpack, Firebase, REST API",B.Tech IT - Jadavpur University,85,#
+21,Rohit Saxena,rohit.saxena@email.com,+91-9876543230,3 years,Noida India,"React, Redux, JavaScript, TypeScript, CSS3",B.Tech CS - Amity University,82,#
+22,Neha Agarwal,neha.agarwal@email.com,+91-9876543231,6 years,Mumbai India,"Python, TensorFlow, Computer Vision, OpenCV, PyTorch",M.Tech AI - IIT Kharagpur,95,#
+23,Tarun Sethi,tarun.sethi@email.com,+91-9876543232,2 years,Chandigarh India,"Linux, Bash, Python, Docker, Networking",B.Tech ECE - PU Chandigarh,79,#
+24,Kavya Pillai,kavya.pillai@email.com,+91-9876543233,5 years,Trivandrum India,"SQL, PostgreSQL, MongoDB, Redis, Python, Data Modelling",M.Tech CS - Kerala University,88,#
+25,Aditya Mishra,aditya.mishra@email.com,+91-9876543234,10 years,Bangalore India,"Architecture, Java, Microservices, AWS, System Design",B.Tech CS - NIT Trichy,97,#

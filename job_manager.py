@@ -1,336 +1,432 @@
+# job_manager.py
+"""
+Job & Shortlist Database Manager
+Handles all MongoDB CRUD for jobs, shortlists, and recruiter stats.
+Used by recruiter_engine.py Blueprint routes.
+"""
+
+import logging
 from datetime import datetime
-from bson import ObjectId
 from typing import Dict, List, Optional
 
+from bson import ObjectId
+from flask import current_app
+
+logger = logging.getLogger(__name__)
+
+
+def _get_db():
+    """Safely retrieve MongoDB from the Flask app context."""
+    try:
+        db = current_app.config.get("db")
+        if db is None:
+            logger.error("MongoDB not configured in app.config['db']")
+        return db
+    except RuntimeError:
+        logger.error("Called outside of Flask application context")
+        return None
+
+
+def _to_str(doc: Dict) -> Dict:
+    """Convert ObjectId fields to strings and datetime fields to ISO strings."""
+    if doc is None:
+        return doc
+    doc["_id"] = str(doc["_id"])
+    for key in ("createdAt", "updatedAt", "shortlistedAt", "interviewDate"):
+        if key in doc and hasattr(doc[key], "isoformat"):
+            doc[key] = doc[key].isoformat()
+    return doc
+
+
 class JobManager:
-    def __init__(self):
-        """Initialize Job Manager with database connection"""
-        self.db = None
-        self._init_db()
-    
-    def _init_db(self):
-        """Initialize database connection"""
-        try:
-            from app import get_db
-            self.db = get_db()
-        except:
-            print("Warning: Database connection not initialized")
-    
-    # ============ JOB CRUD OPERATIONS ============
-    
-    def create_job(self, job_data: Dict) -> str:
+    """All database operations for jobs, shortlists, and recruiter analytics."""
+
+    # ─────────────────────────────────────────────
+    # JOB CRUD
+    # ─────────────────────────────────────────────
+
+    def create_job(self, data: Dict) -> str:
         """
-        Create a new job posting
-        
-        Args:
-            job_data: Job posting details
-        
+        Insert a new job document.
+
+        Required keys in `data`:
+            title, company, description, requirements, recruiterId
+
         Returns:
-            Job ID
+            Inserted document _id as string.
         """
+        db = _get_db()
+        if db is None:
+            raise RuntimeError("Database not available")
+
         job = {
-            'title': job_data.get('title'),
-            'company': job_data.get('company'),
-            'location': job_data.get('location', ''),
-            'type': job_data.get('type', 'Full-time'),  # Full-time, Part-time, Contract
-            'mode': job_data.get('mode', 'Hybrid'),  # Remote, Hybrid, On-site
-            'description': job_data.get('description'),
-            'requirements': job_data.get('requirements'),
-            'responsibilities': job_data.get('responsibilities', ''),
-            'skills': job_data.get('skills', []),
-            'experienceRequired': job_data.get('experienceRequired', 0),
-            'educationRequired': job_data.get('educationRequired', ''),
-            'salary': job_data.get('salary', {}),
-            'benefits': job_data.get('benefits', []),
-            'recruiterId': job_data.get('recruiterId'),
-            'recruiterName': job_data.get('recruiterName', ''),
-            'status': 'active',  # active, closed, draft
-            'applicationsCount': 0,
-            'shortlistedCount': 0,
-            'createdAt': datetime.utcnow(),
-            'updatedAt': datetime.utcnow(),
-            'expiresAt': job_data.get('expiresAt'),
+            "title":          data["title"],
+            "company":        data["company"],
+            "location":       data.get("location", "Not specified"),
+            "type":           data.get("type", "Full Time"),
+            "experience":     data.get("experience", ""),
+            "salary":         data.get("salary", "Competitive"),
+            "description":    data["description"],
+            "requirements":   data["requirements"],
+            "skills":         data.get("skills", []),
+            "recruiterId":    data["recruiterId"],
+            "status":         "active",
+            "applicants":     [],
+            "shortlistCount": 0,
+            "createdAt":      datetime.utcnow(),
+            "updatedAt":      datetime.utcnow(),
         }
-        
-        result = self.db.jobs.insert_one(job)
+
+        result = db.jobs.insert_one(job)
+        logger.info(f"Job created: {result.inserted_id}")
         return str(result.inserted_id)
-    
-    def get_job_by_id(self, job_id: str) -> Optional[Dict]:
-        """Get job by ID"""
-        try:
-            job = self.db.jobs.find_one({'_id': ObjectId(job_id)})
-            if job:
-                job['_id'] = str(job['_id'])
-                job['createdAt'] = job['createdAt'].isoformat() if 'createdAt' in job else None
-                job['updatedAt'] = job['updatedAt'].isoformat() if 'updatedAt' in job else None
-            return job
-        except:
-            return None
-    
+
     def get_jobs_by_recruiter(self, recruiter_id: str) -> List[Dict]:
-        """Get all jobs posted by a recruiter"""
-        jobs = list(self.db.jobs.find({'recruiterId': recruiter_id}).sort('createdAt', -1))
-        
+        """Return all jobs posted by a recruiter, newest first."""
+        db = _get_db()
+        if db is None:
+            return []
+
+        jobs = list(db.jobs.find({"recruiterId": recruiter_id}).sort("createdAt", -1))
         for job in jobs:
-            job['_id'] = str(job['_id'])
-            job['createdAt'] = job['createdAt'].isoformat() if 'createdAt' in job else None
-            job['updatedAt'] = job['updatedAt'].isoformat() if 'updatedAt' in job else None
-        
+            _to_str(job)
+            job["applicantCount"] = len(job.get("applicants", []))
         return jobs
-    
-    def update_job(self, job_id: str, update_data: Dict) -> bool:
-        """Update job posting"""
+
+    def get_job_by_id(self, job_id: str) -> Optional[Dict]:
+        """Return a single job document by its ID."""
+        db = _get_db()
+        if db is None:
+            return None
+
         try:
-            update_data['updatedAt'] = datetime.utcnow()
-            
-            result = self.db.jobs.update_one(
-                {'_id': ObjectId(job_id)},
-                {'$set': update_data}
-            )
-            
-            return result.modified_count > 0
-        except:
+            job = db.jobs.find_one({"_id": ObjectId(job_id)})
+            if job:
+                _to_str(job)
+                job["applicantCount"] = len(job.get("applicants", []))
+            return job
+        except Exception as e:
+            logger.error(f"get_job_by_id error: {e}")
+            return None
+
+    def update_job(self, job_id: str, data: Dict) -> bool:
+        """
+        Update a job's fields.
+        Strips protected fields (_id, recruiterId, createdAt) from payload.
+        Returns True if a document was matched.
+        """
+        db = _get_db()
+        if db is None:
             return False
-    
+
+        # Prevent overwriting protected fields
+        for key in ("_id", "recruiterId", "createdAt"):
+            data.pop(key, None)
+
+        data["updatedAt"] = datetime.utcnow()
+
+        try:
+            result = db.jobs.update_one(
+                {"_id": ObjectId(job_id)},
+                {"$set": data},
+            )
+            return result.matched_count > 0
+        except Exception as e:
+            logger.error(f"update_job error: {e}")
+            return False
+
     def delete_job(self, job_id: str) -> bool:
-        """Delete job posting"""
-        try:
-            # Also delete all shortlist entries for this job
-            self.db.shortlists.delete_many({'jobId': job_id})
-            
-            result = self.db.jobs.delete_one({'_id': ObjectId(job_id)})
-            return result.deleted_count > 0
-        except:
+        """Delete a job and its shortlist entries. Returns True if deleted."""
+        db = _get_db()
+        if db is None:
             return False
-    
-    def close_job(self, job_id: str) -> bool:
-        """Close job posting (mark as closed but don't delete)"""
-        return self.update_job(job_id, {'status': 'closed'})
-    
-    # ============ SHORTLIST OPERATIONS ============
-    
-    def add_to_shortlist(self, shortlist_data: Dict) -> str:
+
+        try:
+            result = db.jobs.delete_one({"_id": ObjectId(job_id)})
+            if result.deleted_count > 0:
+                # Clean up related shortlist entries
+                db.shortlist.delete_many({"jobId": job_id})
+                logger.info(f"Job deleted: {job_id}")
+                return True
+            return False
+        except Exception as e:
+            logger.error(f"delete_job error: {e}")
+            return False
+
+    def toggle_job_status(self, job_id: str) -> Optional[str]:
+        """Toggle job between 'active' and 'closed'. Returns new status."""
+        job = self.get_job_by_id(job_id)
+        if not job:
+            return None
+        new_status = "closed" if job.get("status") == "active" else "active"
+        self.update_job(job_id, {"status": new_status})
+        return new_status
+
+    # ─────────────────────────────────────────────
+    # SHORTLIST CRUD
+    # ─────────────────────────────────────────────
+
+    def add_to_shortlist(self, data: Dict) -> str:
         """
-        Add candidate to shortlist for a job
-        
-        Args:
-            shortlist_data: Shortlist entry details
-        
+        Add a candidate to the shortlist.
+
+        Required keys: jobId, candidateId, recruiterId
+
         Returns:
-            Shortlist ID
+            Inserted _id as string.
         """
-        # Check if already shortlisted
-        existing = self.db.shortlists.find_one({
-            'jobId': shortlist_data.get('jobId'),
-            'candidateId': shortlist_data.get('candidateId')
+        db = _get_db()
+        if db is None:
+            raise RuntimeError("Database not available")
+
+        # Prevent duplicates
+        existing = db.shortlist.find_one({
+            "jobId":       data["jobId"],
+            "candidateId": data["candidateId"],
         })
-        
         if existing:
-            return str(existing['_id'])
-        
-        shortlist_entry = {
-            'jobId': shortlist_data.get('jobId'),
-            'candidateId': shortlist_data.get('candidateId'),
-            'recruiterId': shortlist_data.get('recruiterId'),
-            'candidateName': shortlist_data.get('candidateName', ''),
-            'candidateEmail': shortlist_data.get('candidateEmail', ''),
-            'matchScore': shortlist_data.get('matchScore', 0),
-            'status': 'shortlisted',  # shortlisted, interview_scheduled, selected, rejected
-            'notes': shortlist_data.get('notes', ''),
-            'createdAt': datetime.utcnow(),
-            'updatedAt': datetime.utcnow()
+            return str(existing["_id"])
+
+        shortlist_doc = {
+            "jobId":          data["jobId"],
+            "candidateId":    data["candidateId"],
+            "recruiterId":    data["recruiterId"],
+            "status":         data.get("status", "shortlisted"),
+            "notes":          data.get("notes", ""),
+            "matchScore":     data.get("matchScore", 0),
+            "shortlistedAt":  datetime.utcnow(),
+            "interviewDate":  None,
         }
-        
-        result = self.db.shortlists.insert_one(shortlist_entry)
-        
-        # Update job's shortlisted count
-        self.db.jobs.update_one(
-            {'_id': ObjectId(shortlist_data.get('jobId'))},
-            {'$inc': {'shortlistedCount': 1}}
-        )
-        
+
+        result = db.shortlist.insert_one(shortlist_doc)
+
+        # Increment shortlistCount on the job
+        try:
+            db.jobs.update_one(
+                {"_id": ObjectId(data["jobId"])},
+                {"$inc": {"shortlistCount": 1}},
+            )
+        except Exception:
+            pass
+
         return str(result.inserted_id)
-    
+
     def get_shortlisted_candidates(self, job_id: str) -> List[Dict]:
-        """Get all shortlisted candidates for a job"""
-        shortlisted = list(self.db.shortlists.find({'jobId': job_id}).sort('matchScore', -1))
-        
-        for entry in shortlisted:
-            entry['_id'] = str(entry['_id'])
-            entry['createdAt'] = entry['createdAt'].isoformat() if 'createdAt' in entry else None
-            entry['updatedAt'] = entry['updatedAt'].isoformat() if 'updatedAt' in entry else None
-        
-        return shortlisted
-    
+        """
+        Return shortlisted candidates for a job,
+        with candidate & job details embedded.
+        """
+        db = _get_db()
+        if db is None:
+            return []
+
+        entries = list(db.shortlist.find({"jobId": job_id}).sort("shortlistedAt", -1))
+        return self._enrich_shortlist(db, entries)
+
+    def get_shortlist_by_recruiter(self, recruiter_id: str) -> List[Dict]:
+        """Return all shortlisted candidates for a recruiter."""
+        db = _get_db()
+        if db is None:
+            return []
+
+        entries = list(
+            db.shortlist.find({"recruiterId": recruiter_id}).sort("shortlistedAt", -1)
+        )
+        return self._enrich_shortlist(db, entries)
+
     def remove_from_shortlist(self, shortlist_id: str) -> bool:
-        """Remove candidate from shortlist"""
-        try:
-            # Get shortlist entry to update job count
-            entry = self.db.shortlists.find_one({'_id': ObjectId(shortlist_id)})
-            
-            if entry:
-                # Delete shortlist entry
-                result = self.db.shortlists.delete_one({'_id': ObjectId(shortlist_id)})
-                
-                # Update job's shortlisted count
-                self.db.jobs.update_one(
-                    {'_id': ObjectId(entry['jobId'])},
-                    {'$inc': {'shortlistedCount': -1}}
-                )
-                
-                return result.deleted_count > 0
-            
+        """Remove a shortlist entry by its _id."""
+        db = _get_db()
+        if db is None:
             return False
-        except:
-            return False
-    
-    def update_shortlist_status(self, shortlist_id: str, status: str) -> bool:
-        """Update shortlist entry status"""
+
         try:
-            result = self.db.shortlists.update_one(
-                {'_id': ObjectId(shortlist_id)},
-                {
-                    '$set': {
-                        'status': status,
-                        'updatedAt': datetime.utcnow()
-                    }
-                }
+            entry = db.shortlist.find_one({"_id": ObjectId(shortlist_id)})
+            result = db.shortlist.delete_one({"_id": ObjectId(shortlist_id)})
+            if result.deleted_count > 0 and entry:
+                # Decrement counter on the job
+                try:
+                    db.jobs.update_one(
+                        {"_id": ObjectId(entry["jobId"])},
+                        {"$inc": {"shortlistCount": -1}},
+                    )
+                except Exception:
+                    pass
+                return True
+            return False
+        except Exception as e:
+            logger.error(f"remove_from_shortlist error: {e}")
+            return False
+
+    def update_shortlist_status(self, shortlist_id: str, status: str, extra: Dict = None) -> bool:
+        """
+        Update a shortlist entry's status.
+
+        Valid statuses: shortlisted, contacted, interview_scheduled, hired, rejected
+        Optional `extra` dict can carry interviewDate etc.
+        """
+        db = _get_db()
+        if db is None:
+            return False
+
+        VALID = {"shortlisted", "contacted", "interview_scheduled", "hired", "rejected"}
+        if status not in VALID:
+            logger.warning(f"Invalid shortlist status: {status}")
+            return False
+
+        update_data = {"status": status, "updatedAt": datetime.utcnow()}
+        if extra:
+            update_data.update(extra)
+
+        try:
+            result = db.shortlist.update_one(
+                {"_id": ObjectId(shortlist_id)},
+                {"$set": update_data},
             )
-            
-            return result.modified_count > 0
-        except:
+            return result.matched_count > 0
+        except Exception as e:
+            logger.error(f"update_shortlist_status error: {e}")
             return False
-    
-    def add_shortlist_notes(self, shortlist_id: str, notes: str) -> bool:
-        """Add notes to shortlist entry"""
-        try:
-            result = self.db.shortlists.update_one(
-                {'_id': ObjectId(shortlist_id)},
-                {
-                    '$set': {
-                        'notes': notes,
-                        'updatedAt': datetime.utcnow()
-                    }
-                }
-            )
-            
-            return result.modified_count > 0
-        except:
-            return False
-    
-    # ============ ANALYTICS & STATISTICS ============
-    
+
+    # ─────────────────────────────────────────────
+    # ANALYTICS
+    # ─────────────────────────────────────────────
+
     def count_jobs_by_recruiter(self, recruiter_id: str) -> int:
-        """Count total jobs posted by recruiter"""
-        return self.db.jobs.count_documents({'recruiterId': recruiter_id})
-    
+        db = _get_db()
+        if db is None:
+            return 0
+        return db.jobs.count_documents({"recruiterId": recruiter_id})
+
     def count_active_jobs(self, recruiter_id: str) -> int:
-        """Count active jobs"""
-        return self.db.jobs.count_documents({
-            'recruiterId': recruiter_id,
-            'status': 'active'
-        })
-    
+        db = _get_db()
+        if db is None:
+            return 0
+        return db.jobs.count_documents({"recruiterId": recruiter_id, "status": "active"})
+
     def count_shortlisted_candidates(self, recruiter_id: str) -> int:
-        """Count total shortlisted candidates"""
-        return self.db.shortlists.count_documents({'recruiterId': recruiter_id})
-    
-    def get_recent_activity(self, recruiter_id: str, limit: int = 5) -> List[Dict]:
-        """Get recent activity for recruiter"""
+        db = _get_db()
+        if db is None:
+            return 0
+        return db.shortlist.count_documents({"recruiterId": recruiter_id})
+
+    def count_interviewed(self, recruiter_id: str) -> int:
+        db = _get_db()
+        if db is None:
+            return 0
+        return db.shortlist.count_documents({
+            "recruiterId": recruiter_id,
+            "status": {"$in": ["interview_scheduled", "hired"]},
+        })
+
+    def count_hired(self, recruiter_id: str) -> int:
+        db = _get_db()
+        if db is None:
+            return 0
+        return db.shortlist.count_documents({"recruiterId": recruiter_id, "status": "hired"})
+
+    def get_recent_activity(self, recruiter_id: str, limit: int = 10) -> List[Dict]:
+        """Return recent jobs and shortlist events for the activity feed."""
+        db = _get_db()
+        if db is None:
+            return []
+
         activities = []
-        
+
         # Recent jobs
-        recent_jobs = list(self.db.jobs.find(
-            {'recruiterId': recruiter_id}
-        ).sort('createdAt', -1).limit(limit))
-        
+        recent_jobs = list(
+            db.jobs.find({"recruiterId": recruiter_id})
+            .sort("createdAt", -1)
+            .limit(limit // 2)
+        )
         for job in recent_jobs:
             activities.append({
-                'type': 'job_created',
-                'title': job.get('title'),
-                'timestamp': job.get('createdAt').isoformat() if 'createdAt' in job else None
+                "type":      "job_posted",
+                "title":     f"Posted: {job.get('title', 'Job')}",
+                "timestamp": job["createdAt"].isoformat() if "createdAt" in job else "",
+                "jobId":     str(job["_id"]),
             })
-        
+
         # Recent shortlists
-        recent_shortlists = list(self.db.shortlists.find(
-            {'recruiterId': recruiter_id}
-        ).sort('createdAt', -1).limit(limit))
-        
-        for entry in recent_shortlists:
+        recent_sl = list(
+            db.shortlist.find({"recruiterId": recruiter_id})
+            .sort("shortlistedAt", -1)
+            .limit(limit // 2)
+        )
+        for sl in recent_sl:
             activities.append({
-                'type': 'candidate_shortlisted',
-                'candidateName': entry.get('candidateName'),
-                'timestamp': entry.get('createdAt').isoformat() if 'createdAt' in entry else None
+                "type":        "candidate_shortlisted",
+                "title":       f"Shortlisted candidate for job",
+                "timestamp":   sl["shortlistedAt"].isoformat() if "shortlistedAt" in sl else "",
+                "candidateId": sl.get("candidateId", ""),
             })
-        
-        # Sort by timestamp and limit
-        activities.sort(key=lambda x: x['timestamp'], reverse=True)
+
+        # Sort combined list by timestamp descending
+        activities.sort(key=lambda x: x.get("timestamp", ""), reverse=True)
         return activities[:limit]
-    
-    def get_job_statistics(self, job_id: str) -> Dict:
-        """Get statistics for a specific job"""
-        job = self.get_job_by_id(job_id)
-        
-        if not job:
-            return {}
-        
-        shortlisted_count = self.db.shortlists.count_documents({'jobId': job_id})
-        
-        # Get status distribution
-        status_counts = {}
-        pipeline = [
-            {'$match': {'jobId': job_id}},
-            {'$group': {
-                '_id': '$status',
-                'count': {'$sum': 1}
-            }}
-        ]
-        
-        for result in self.db.shortlists.aggregate(pipeline):
-            status_counts[result['_id']] = result['count']
-        
+
+    def get_dashboard_stats(self, recruiter_id: str) -> Dict:
+        """Return all stats needed for the RecruiterDashboard component."""
         return {
-            'jobTitle': job.get('title'),
-            'totalShortlisted': shortlisted_count,
-            'statusDistribution': status_counts,
-            'createdAt': job.get('createdAt'),
-            'status': job.get('status')
+            "activeJobs":        self.count_active_jobs(recruiter_id),
+            "totalCandidates":   self.count_shortlisted_candidates(recruiter_id),
+            "shortlisted":       self.count_shortlisted_candidates(recruiter_id),
+            "interviewed":       self.count_interviewed(recruiter_id),
+            "hired":             self.count_hired(recruiter_id),
+            "totalJobs":         self.count_jobs_by_recruiter(recruiter_id),
         }
-    
-    # ============ SEARCH & FILTER ============
-    
-    def search_jobs(self, query: str, filters: Dict = None) -> List[Dict]:
-        """Search jobs by query and filters"""
-        search_criteria = {}
-        
-        # Text search
-        if query:
-            search_criteria['$or'] = [
-                {'title': {'$regex': query, '$options': 'i'}},
-                {'description': {'$regex': query, '$options': 'i'}},
-                {'company': {'$regex': query, '$options': 'i'}}
-            ]
-        
-        # Apply filters
-        if filters:
-            if 'status' in filters:
-                search_criteria['status'] = filters['status']
-            
-            if 'type' in filters:
-                search_criteria['type'] = filters['type']
-            
-            if 'location' in filters:
-                search_criteria['location'] = {'$regex': filters['location'], '$options': 'i'}
-        
-        jobs = list(self.db.jobs.find(search_criteria).sort('createdAt', -1))
-        
-        for job in jobs:
-            job['_id'] = str(job['_id'])
-            job['createdAt'] = job['createdAt'].isoformat() if 'createdAt' in job else None
-            job['updatedAt'] = job['updatedAt'].isoformat() if 'updatedAt' in job else None
-        
-        return jobs
-    
-    def get_all_active_jobs(self) -> List[Dict]:
-        """Get all active jobs across all recruiters"""
-        return self.search_jobs('', {'status': 'active'})
+
+    # ─────────────────────────────────────────────
+    # CANDIDATE APPLICATION
+    # ─────────────────────────────────────────────
+
+    def add_applicant_to_job(self, job_id: str, applicant_info: Dict) -> bool:
+        """Push an applicant entry into a job's `applicants` array."""
+        db = _get_db()
+        if db is None:
+            return False
+        try:
+            applicant_info["appliedAt"] = datetime.utcnow().isoformat()
+            result = db.jobs.update_one(
+                {"_id": ObjectId(job_id)},
+                {"$push": {"applicants": applicant_info}},
+            )
+            return result.modified_count > 0
+        except Exception as e:
+            logger.error(f"add_applicant_to_job error: {e}")
+            return False
+
+    # ─────────────────────────────────────────────
+    # PRIVATE HELPERS
+    # ─────────────────────────────────────────────
+
+    def _enrich_shortlist(self, db, entries: List[Dict]) -> List[Dict]:
+        """Embed candidate and job details into shortlist entries."""
+        enriched = []
+        for entry in entries:
+            _to_str(entry)
+
+            # Embed candidate profile
+            try:
+                candidate = db.users.find_one({"_id": ObjectId(entry["candidateId"])})
+                if candidate:
+                    candidate.pop("password", None)
+                    _to_str(candidate)
+                    entry["candidate"] = candidate
+            except Exception:
+                entry["candidate"] = None
+
+            # Embed job summary
+            try:
+                job = db.jobs.find_one({"_id": ObjectId(entry["jobId"])})
+                if job:
+                    entry["job"] = {
+                        "_id":     str(job["_id"]),
+                        "title":   job.get("title"),
+                        "company": job.get("company"),
+                    }
+            except Exception:
+                entry["job"] = None
+
+            enriched.append(entry)
+        return enriched
