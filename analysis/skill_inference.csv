@@ -1,0 +1,7 @@
+setting,micro_f1,macro_f1,n_labels,domain,n_cells,n_positive
+A: as published (Projects+Keywords+Tech),1.0,1.0,7.0,IT,,
+B: leak-reduced (Projects only),0.6754171754171754,0.6749775453348958,7.0,IT,,
+C: inference-only cells (label word absent),0.6754171754171754,0.6754171754171754,,IT,7000.0,4025.0
+A: as published (Projects+Keywords+Tech),0.9864208296997633,0.9864326611899427,6.0,Non-IT,,
+B: leak-reduced (Projects only),0.7822939290516082,0.782247368214729,6.0,Non-IT,,
+C: inference-only cells (label word absent),0.7833678926115901,0.7833678926115901,,Non-IT,5677.0,3781.0

@@ -1,0 +1,80 @@
+{
+  "files": 37,
+  "heuristics": [
+    {
+      "heuristic": "H1  Visibility of system status",
+      "files": 20,
+      "coverage": 0.5405405405405406
+    },
+    {
+      "heuristic": "H2  Match with the real world",
+      "files": 8,
+      "coverage": 0.21621621621621623
+    },
+    {
+      "heuristic": "H3  User control and freedom",
+      "files": 1,
+      "coverage": 0.02702702702702703
+    },
+    {
+      "heuristic": "H4  Consistency and standards",
+      "files": 21,
+      "coverage": 0.5675675675675675
+    },
+    {
+      "heuristic": "H5  Error prevention",
+      "files": 12,
+      "coverage": 0.32432432432432434
+    },
+    {
+      "heuristic": "H6  Recognition rather than recall",
+      "files": 4,
+      "coverage": 0.10810810810810811
+    },
+    {
+      "heuristic": "H7  Flexibility and efficiency",
+      "files": 0,
+      "coverage": 0.0
+    },
+    {
+      "heuristic": "H8  Aesthetic and minimalist design",
+      "files": null,
+      "coverage": null,
+      "note": "not assessable by code inspection"
+    },
+    {
+      "heuristic": "H9  Help users recover from errors",
+      "files": 22,
+      "coverage": 0.5945945945945946
+    },
+    {
+      "heuristic": "H10 Help and documentation",
+      "files": 5,
+      "coverage": 0.13513513513513514
+    }
+  ],
+  "async_without_status": [
+    "DomainCheck.js",
+    "Login.js",
+    "RecruiterDashboard.js",
+    "SkillPrediction.js"
+  ],
+  "silent_error_handling": [
+    "Analytics.js",
+    "App.js",
+    "CandidateSearch.js",
+    "InterviewFeedback.js",
+    "InterviewHistory.js",
+    "InterviewSession.js",
+    "JobApplicants.js",
+    "JobDetail.js",
+    "JobListings.js",
+    "JobOpenings.js",
+    "MockTestQuiz.js",
+    "RecruiterDashboard.js",
+    "ShortlistManager.js",
+    "SkillPrediction.js",
+    "SubjectSelection.js",
+    "TestHistory.js"
+  ]
+}
