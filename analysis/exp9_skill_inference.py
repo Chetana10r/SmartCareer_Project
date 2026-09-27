@@ -112,3 +112,6 @@ for name, csv in [('IT', paths.IT_CSV), ('Non-IT', paths.NONIT_CSV)]:
 df = pd.DataFrame(rows)
 df.to_csv(paths.out('skill_inference.csv'), index=False)
 print("\nsaved skill_inference.csv")
+
+
+
